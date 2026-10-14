@@ -1,35 +1,48 @@
-import { useState } from 'react'
-import reactLogo from '/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import {
+  AppBar, Tab, Tabs, Toolbar, Typography,
+} from '@mui/material';
+import UserPicker from './components/UserPicker';
+import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext';
+import AdminPage from './pages/AdminPage';
+import ProjectsPage from './pages/ProjectsPage';
 
-function App() {
-  const [count, setCount] = useState(0)
+/**
+ * Navigation shell: tabs depend on the acting user's role.
+ */
+function Shell() {
+  const { users, currentUser } = useCurrentUser();
+  const [tab, setTab] = useState('projects');
+  // With no users at all, anyone may open Users to create the first admin.
+  const canSeeUsers = currentUser?.role === 'admin' || users.length === 0;
+  const activeTab = tab === 'admin' && !canSeeUsers ? 'projects' : tab;
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <AppBar position="static">
+        <Toolbar sx={{ gap: 2 }}>
+          <Typography variant="h6" sx={{ mr: 2 }}>Project Tracker</Typography>
+          <Tabs value={activeTab} onChange={(_, value) => setTab(value)} textColor="inherit" sx={{ flexGrow: 1 }}>
+            <Tab value="projects" label="Projects" />
+            {canSeeUsers && <Tab value="admin" label="Users" />}
+          </Tabs>
+          <UserPicker />
+        </Toolbar>
+      </AppBar>
+      {activeTab === 'admin' ? <AdminPage /> : <ProjectsPage />}
     </>
-  )
+  );
 }
 
-export default App
+/**
+ * Application root.
+ */
+function App() {
+  return (
+    <CurrentUserProvider>
+      <Shell />
+    </CurrentUserProvider>
+  );
+}
+
+export default App;
