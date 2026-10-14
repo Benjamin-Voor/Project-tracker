@@ -7,13 +7,14 @@ const API_URL = import.meta.env.VITE_API_URL ?? '';
  * @param {object} [options]
  * @param {string} [options.method]
  * @param {object} [options.body]
- * @param {string} options.actorId - id of the acting user
+ * @param {string} [options.actorId] - id of the acting user (omit for login)
  * @param {Object<string, string>} [options.query] - extra query parameters
  * @returns {Promise<object>}
  */
 export async function request(path, { method = 'GET', body, actorId, query = {} } = {}) {
-  const params = new URLSearchParams({ actor_id: actorId, ...query });
-  const res = await fetch(`${API_URL}${path}?${params}`, {
+  const params = new URLSearchParams(actorId ? { actor_id: actorId, ...query } : query);
+  const queryString = params.toString();
+  const res = await fetch(`${API_URL}${path}${queryString ? `?${queryString}` : ''}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,

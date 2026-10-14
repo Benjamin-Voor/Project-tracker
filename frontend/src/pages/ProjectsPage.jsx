@@ -13,14 +13,14 @@ import {
 import AllocationsDialog from '../components/AllocationsDialog';
 import ProjectFormDialog from '../components/ProjectFormDialog';
 import ProjectTable, { canManageProject } from '../components/ProjectTable';
-import { useCurrentUser } from '../context/CurrentUserContext';
+import { useAuth } from '../context/AuthContext';
 import { archiveProject, fetchProjects, restoreProject } from '../services/projects';
 
 /**
  * Projects page: role-aware list with create, edit, archive and team allocation.
  */
 function ProjectsPage() {
-  const { users, currentUser } = useCurrentUser();
+  const { users, currentUser } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

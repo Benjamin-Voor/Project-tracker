@@ -1,25 +1,26 @@
 import { MenuItem, TextField } from '@mui/material';
-import { useCurrentUser } from '../context/CurrentUserContext';
+import { useAuth } from '../context/AuthContext';
 
 /**
- * Dropdown for choosing which user the app acts as (placeholder for login).
+ * Admin-only dropdown for viewing the app as another user (demos).
+ * Role checks stay in the UI; the backend still looks up the role by id.
  */
 function UserPicker() {
-  const { users, error, currentUser, selectUser } = useCurrentUser();
+  const { users, error, currentUser, viewAs } = useAuth();
 
   return (
     <TextField
       select
       size="small"
-      label="Acting as"
+      label="View as"
       value={currentUser ? currentUser.id : ''}
-      onChange={(event) => selectUser(event.target.value)}
+      onChange={(event) => viewAs(event.target.value)}
       error={Boolean(error)}
       sx={{ minWidth: 260, bgcolor: 'background.paper', borderRadius: 1 }}
     >
       {users.length === 0 && (
         <MenuItem value="" disabled>
-          {error || 'No users yet - add one on the Users tab'}
+          {error || 'No users'}
         </MenuItem>
       )}
       {users.map((user) => (

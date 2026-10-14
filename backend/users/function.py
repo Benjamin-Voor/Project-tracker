@@ -13,6 +13,7 @@ from postgres_service import (
     DuplicateUserError,
     InvalidManagerError,
     create_user,
+    get_actor,
     list_users,
 )
 
@@ -126,21 +127,28 @@ def handler(event: Optional[dict[str, Any]] = None, context: Any = None) -> dict
     """
     event = event or {}
     method = event.get("requestContext", {}).get("http", {}).get("method", "GET").upper()
+    params = event.get("queryStringParameters") or {}
 
     try:
+        actor_id = params.get("actor_id")
+        actor = get_actor(PG_CONFIG, actor_id) if UUID_RE.match(actor_id or "") else None
+        if actor is None:
+            return _response(401, {"error": "Unknown or inactive acting user"})
+
         if method == "GET":
-            params = event.get("queryStringParameters") or {}
             include_archived = params.get("include_archived") == "true"
-            return _response(200, {"users": list_users(PG_CONFIG, include_archived)})
+            return _response(200, {"users": list_users(PG_CONFIG, actor, include_archived)})
 
         if method == "POST":
+            if actor["role"] != "admin":
+                return _response(403, {"error": "Only admins can create users"})
             data = _parse_body(event)
             if data is None:
                 return _response(400, {"error": "Body must be a JSON object"})
             clean, errors = validate_user(data)
             if errors:
                 return _response(400, {"error": "Validation failed", "fields": errors})
-            return _response(201, {"user": create_user(PG_CONFIG, clean)})
+            return _response(201, {"user": create_user(PG_CONFIG, actor, clean)})
 
         return _response(405, {"error": f"Method {method} not allowed"})
     except DuplicateUserError as exc:

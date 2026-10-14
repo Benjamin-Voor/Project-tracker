@@ -37,16 +37,20 @@ These override anything else in this repo, including agent suggestions.
 - Manager: everything an employee can do; cannot create projects; edits their projects (including start/end dates), adjusts budget, creates milestones, assigns employees to their projects, edits/archives employees on their team, and archives a project only after all its milestones are done.
 - Employee: views their assigned projects, logs time, and edits only their own name and email.
 - Deploy to both LocalStack and AWS; deploy early.
-- Authentication is not an explicit goal. Build projects first; login is deferred.
-- Until login exists, the UI has a user picker that selects the acting user. The client sends only that user's id (`actor_id`); the backend looks up the role from the database.
+- Authentication (started 2026-10-14, reversing the earlier "deferred" decision): simple username + password login, no tokens. The browser keeps only the user in `sessionStorage`; the client still sends `actor_id` and the backend looks up the role. Login, failed login and logout are written to `audit_log`.
+- Admins may keep an "acting as" picker to view the app as another user (demos only). Everyone else loses the picker.
+- No bootstrap page: the first admin is seeded with SQL ([db/seed-admin.sql](db/seed-admin.sql)). A seeded or admin-created user must change their password on first login (`users.must_change_password`).
+- `/api/users` requires `actor_id`; only admins can create users.
 - Next feature to build: projects (CRUD, manager and employee allocation).
 - Fixed (owner approved): the `validate_milestone_dependency()` typo in [db/schema.sql](db/schema.sql) now uses `depends_on_milestone_id`.
 
 ## Current state
 
 - Done: `backend/users` Lambda (GET list, POST create) and the frontend admin page (`AdminPage`, `AddUserDialog`, `UserTable`, `services/users.js`). The user form still asks for a typed username instead of generating one.
-- Done: `backend/projects` Lambda (list, create, edit, archive/restore, allocations; every request needs `actor_id`) and the frontend Projects page with the acting-user picker. Handler tested locally against Postgres; not yet deployed or exercised through the browser.
-- Not done: `/api/users` does not check the acting user, milestones, time entries, expenses, audit log viewer.
+- Done: `backend/projects` Lambda (list, create, edit, archive/restore, allocations; every request needs `actor_id`) and the frontend Projects page. Handler tested locally against Postgres.
+- Done (not yet deployed or run in the browser): `backend/auth` Lambda (`/login`, `/password`, `/logout`), login page, forced password change, admin-only "View as" picker, `/api/users` scoped by role and admin-only create, `users.must_change_password`, [db/seed-admin.sql](db/seed-admin.sql). Handlers tested against a throwaway Postgres database.
+- To run auth locally: re-apply [db/schema.sql](db/schema.sql) (adds `must_change_password`), seed the admin with [db/seed-admin.sql](db/seed-admin.sql), then deploy with `./bin/start-dev.sh`.
+- Not done: milestones, time entries, expenses, audit log viewer, username auto-generation, login rate limiting.
 - Known issue: `npm run lint` in `frontend/` fails because `eslint-plugin-react-hooks` is not installed.
 
 ## Repo structure

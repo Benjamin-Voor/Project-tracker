@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Box, Button, Container, Snackbar, Typography } from '@mui/material';
 import AddUserDialog from '../components/AddUserDialog';
 import UserTable from '../components/UserTable';
-import { useCurrentUser } from '../context/CurrentUserContext';
+import { useAuth } from '../context/AuthContext';
 import { fetchUsers } from '../services/users';
 
 /**
  * Admin page: lists users from the database and allows adding new ones.
  */
 function AdminPage() {
-  const { refreshUsers } = useCurrentUser();
+  const { currentUser, refreshUsers } = useAuth();
+  const actorId = currentUser.id;
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -20,13 +21,13 @@ function AdminPage() {
     setLoading(true);
     setError('');
     try {
-      setUsers(await fetchUsers());
+      setUsers(await fetchUsers(actorId));
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [actorId]);
 
   useEffect(() => {
     loadUsers();
@@ -47,6 +48,7 @@ function AdminPage() {
       <UserTable users={users} loading={loading} error={error} />
       <AddUserDialog
         open={dialogOpen}
+        actorId={actorId}
         managers={users.filter((u) => u.role === 'manager')}
         onClose={() => setDialogOpen(false)}
         onCreated={handleCreated}

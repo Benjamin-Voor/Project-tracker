@@ -1,20 +1,24 @@
 import { useState } from 'react';
 import {
-  AppBar, Tab, Tabs, Toolbar, Typography,
+  Alert, AppBar, Button, Tab, Tabs, Toolbar, Typography,
 } from '@mui/material';
+import ChangePasswordDialog from './components/ChangePasswordDialog';
 import UserPicker from './components/UserPicker';
-import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AdminPage from './pages/AdminPage';
+import LoginPage from './pages/LoginPage';
 import ProjectsPage from './pages/ProjectsPage';
 
 /**
- * Navigation shell: tabs depend on the acting user's role.
+ * Navigation shell shown after login; tabs depend on the acting user's role.
  */
 function Shell() {
-  const { users, currentUser } = useCurrentUser();
+  const {
+    sessionUser, currentUser, isViewingAs, logout,
+  } = useAuth();
   const [tab, setTab] = useState('projects');
-  // With no users at all, anyone may open Users to create the first admin.
-  const canSeeUsers = currentUser?.role === 'admin' || users.length === 0;
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const canSeeUsers = currentUser.role === 'admin';
   const activeTab = tab === 'admin' && !canSeeUsers ? 'projects' : tab;
 
   return (
@@ -26,12 +30,33 @@ function Shell() {
             <Tab value="projects" label="Projects" />
             {canSeeUsers && <Tab value="admin" label="Users" />}
           </Tabs>
-          <UserPicker />
+          {sessionUser.role === 'admin' && <UserPicker />}
+          <Typography variant="body2">{`${sessionUser.first_name} ${sessionUser.last_name}`}</Typography>
+          <Button color="inherit" onClick={() => setPasswordOpen(true)}>Password</Button>
+          <Button color="inherit" onClick={logout}>Log out</Button>
         </Toolbar>
       </AppBar>
+      {isViewingAs && (
+        <Alert severity="warning" sx={{ borderRadius: 0 }}>
+          {`Viewing as ${currentUser.first_name} ${currentUser.last_name} (${currentUser.role}). Changes are recorded under that user.`}
+        </Alert>
+      )}
       {activeTab === 'admin' ? <AdminPage /> : <ProjectsPage />}
+      <ChangePasswordDialog
+        open={passwordOpen || sessionUser.must_change_password}
+        required={sessionUser.must_change_password}
+        onClose={() => setPasswordOpen(false)}
+      />
     </>
   );
+}
+
+/**
+ * Shows the login page until someone is logged in.
+ */
+function Gate() {
+  const { sessionUser } = useAuth();
+  return sessionUser ? <Shell /> : <LoginPage />;
 }
 
 /**
@@ -39,9 +64,9 @@ function Shell() {
  */
 function App() {
   return (
-    <CurrentUserProvider>
-      <Shell />
-    </CurrentUserProvider>
+    <AuthProvider>
+      <Gate />
+    </AuthProvider>
   );
 }
 

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
     salary NUMERIC(12,2),
     profile_picture_url TEXT,
     manager_id UUID,
+    must_change_password BOOLEAN NOT NULL DEFAULT false,
     is_archived BOOLEAN NOT NULL DEFAULT false,
     archived_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS manager_id UUID,
+    ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

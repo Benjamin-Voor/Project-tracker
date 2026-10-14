@@ -29,11 +29,12 @@ const EMPTY_FORM = {
  * Dialog form for creating a user.
  * @param {object} props
  * @param {boolean} props.open
+ * @param {string} props.actorId - the acting admin
  * @param {object[]} props.managers - users with role "manager"
  * @param {Function} props.onClose
  * @param {Function} props.onCreated - called with the created user
  */
-function AddUserDialog({ open, managers, onClose, onCreated }) {
+function AddUserDialog({ open, actorId, managers, onClose, onCreated }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -59,7 +60,7 @@ function AddUserDialog({ open, managers, onClose, onCreated }) {
     try {
       const payload = { ...form };
       if (payload.role !== 'employee') delete payload.manager_id;
-      const user = await createUser(payload);
+      const user = await createUser(actorId, payload);
       onCreated(user);
       handleClose();
     } catch (err) {
@@ -97,7 +98,7 @@ function AddUserDialog({ open, managers, onClose, onCreated }) {
             {field('first_name', 'First name', { required: true })}
             {field('last_name', 'Last name', { required: true })}
             {field('email', 'Email', { required: true, type: 'email' })}
-            {field('password', 'Password', { required: true, type: 'password' })}
+            {field('password', 'Temporary password', { required: true, type: 'password' })}
             {field('role', 'Role', { select: true, required: true, children: [
               <MenuItem key="admin" value="admin">Admin</MenuItem>,
               <MenuItem key="manager" value="manager">Manager</MenuItem>,
@@ -127,6 +128,7 @@ function AddUserDialog({ open, managers, onClose, onCreated }) {
 
 AddUserDialog.propTypes = {
   open: PropTypes.bool.isRequired,
+  actorId: PropTypes.string.isRequired,
   managers: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     first_name: PropTypes.string,

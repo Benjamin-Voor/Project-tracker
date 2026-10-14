@@ -1,41 +1,20 @@
-const API_URL = import.meta.env.VITE_API_URL ?? '';
+import { request } from './api';
 
 /**
- * Parse a JSON response and throw an Error carrying the server message on failure.
- * @param {Response} res
- * @returns {Promise<object>}
- */
-async function parse(res) {
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const error = new Error(body.error || `Request failed (${res.status})`);
-    error.fields = body.fields || {};
-    throw error;
-  }
-  return body;
-}
-
-/**
- * Fetch users from the backend (PostgreSQL).
+ * Fetch the users the acting user may see (scoped by role on the server).
+ * @param {string} actorId
  * @returns {Promise<object[]>}
  */
-export async function fetchUsers() {
-  const body = await parse(await fetch(`${API_URL}/api/users`));
-  return body.users;
+export async function fetchUsers(actorId) {
+  return (await request('/api/users', { actorId })).users;
 }
 
 /**
- * Create a user.
+ * Create a user (admin only). The new user must change their password at first login.
+ * @param {string} actorId
  * @param {object} user
  * @returns {Promise<object>} the created user
  */
-export async function createUser(user) {
-  const body = await parse(
-    await fetch(`${API_URL}/api/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(user),
-    }),
-  );
-  return body.user;
+export async function createUser(actorId, user) {
+  return (await request('/api/users', { method: 'POST', actorId, body: user })).user;
 }
