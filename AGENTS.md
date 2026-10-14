@@ -50,6 +50,7 @@ These override anything else in this repo, including agent suggestions.
 - Done: `backend/projects` Lambda (list, create, edit, archive/restore, allocations; every request needs `actor_id`) and the frontend Projects page. Handler tested locally against Postgres.
 - Done (not yet deployed or run in the browser): `backend/auth` Lambda (`/login`, `/password`, `/logout`), login page, forced password change, admin-only "View as" picker, `/api/users` scoped by role and admin-only create, `users.must_change_password`, [db/seed-admin.sql](db/seed-admin.sql). Handlers tested against a throwaway Postgres database.
 - To run auth locally: re-apply [db/schema.sql](db/schema.sql) (adds `must_change_password`), seed the admin with [db/seed-admin.sql](db/seed-admin.sql), then deploy with `./bin/start-dev.sh`.
+- AWS database setup: Aurora is private to the VPC, so `backend/dbsetup` (direct `aws lambda invoke` only) applies its copy of the schema and seeds `admin1`. Re-copy [db/schema.sql](db/schema.sql) into `backend/dbsetup/` after schema changes.
 - Not done: milestones, time entries, expenses, audit log viewer, username auto-generation, login rate limiting.
 - Known issue: `npm run lint` in `frontend/` fails because `eslint-plugin-react-hooks` is not installed.
 
