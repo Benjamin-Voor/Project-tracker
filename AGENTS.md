@@ -41,6 +41,8 @@ These override anything else in this repo, including agent suggestions.
 - Admins may keep an "acting as" picker to view the app as another user (demos only). Everyone else loses the picker.
 - No bootstrap page: the first admin is seeded with SQL ([db/seed-admin.sql](db/seed-admin.sql)). A seeded or admin-created user must change their password on first login (`users.must_change_password`).
 - `/api/users` requires `actor_id`; only admins can create users.
+- Profile: the app-bar "Profile" button always shows the logged-in user (for example `admin1`), even while an admin is viewing as someone else (owner decision, 2026-10-14).
+- Browser: for UI checks the agent opens its own tab (`forceNew`); the owner keeps the human tab and the agent does not drive it.
 - Next feature to build: projects (CRUD, manager and employee allocation).
 - Fixed (owner approved): the `validate_milestone_dependency()` typo in [db/schema.sql](db/schema.sql) now uses `depends_on_milestone_id`.
 
@@ -80,6 +82,7 @@ Common commands to use during development:
 - `./bin/deploy-backend.sh [aws|local]` — deploy backend changes.
 - `./bin/deploy-frontend.sh [aws|local]` — deploy frontend changes.
 - `./bin/setup-environment.sh` — set up the environment on a fresh Ubuntu machine.
+- Skills in `.claude/skills/` (read by Claude Code and by VS Code Copilot): `deploy` (ship to AWS or LocalStack) and `verify-ui` (check the running app in VS Code's integrated browser; Claude Code could not use that browser as of 2026-10-14).
 
 The repo is designed around a local-stack workflow first and AWS deployment second.
 
