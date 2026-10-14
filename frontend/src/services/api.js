@@ -19,7 +19,10 @@ export async function request(path, { method = 'GET', body, actorId, query = {} 
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json().catch(() => ({}));
+  const isJson = (res.headers.get('Content-Type') || '').includes('application/json');
+  const json = isJson ? await res.json().catch(() => ({})) : {};
+  // CloudFront serves index.html (200) in place of any 404, so a non-JSON reply means "not found".
+  if (res.ok && !isJson) throw Object.assign(new Error('Not found'), { fields: {} });
   if (!res.ok) {
     const error = new Error(json.error || `Request failed (${res.status})`);
     error.fields = json.fields || {};

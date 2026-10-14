@@ -91,3 +91,137 @@ export async function removeAllocation(actorId, projectId, userId) {
     actorId,
   })).allocations;
 }
+
+/**
+ * List a project's active milestones (with assignees).
+ * @param {string} actorId
+ * @param {string} projectId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchMilestones(actorId, projectId) {
+  return (await request(`/api/projects/${projectId}/milestones`, { actorId })).milestones;
+}
+
+/**
+ * Create a milestone at the end of the project's sequence.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {object} milestone
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function createMilestone(actorId, projectId, milestone) {
+  return (await request(`/api/projects/${projectId}/milestones`, {
+    method: 'POST', actorId, body: milestone,
+  })).milestones;
+}
+
+/**
+ * Update milestone fields or status.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId
+ * @param {object} changes
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function updateMilestone(actorId, projectId, milestoneId, changes) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}`, {
+    method: 'PATCH', actorId, body: changes,
+  })).milestones;
+}
+
+/**
+ * Archive a milestone; its employees are detached.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function archiveMilestone(actorId, projectId, milestoneId) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}/archive`, {
+    method: 'POST', actorId,
+  })).milestones;
+}
+
+/**
+ * Assign an allocated employee to a milestone.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId
+ * @param {string} userId
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function assignMilestone(actorId, projectId, milestoneId, userId) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}/assignments`, {
+    method: 'POST', actorId, body: { user_id: userId },
+  })).milestones;
+}
+
+/**
+ * Detach an employee from a milestone.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId
+ * @param {string} userId
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function unassignMilestone(actorId, projectId, milestoneId, userId) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}/assignments/${userId}`, {
+    method: 'DELETE', actorId,
+  })).milestones;
+}
+
+/**
+ * List time entries (managers/admins see all; others see their own).
+ * @param {string} actorId
+ * @param {string} projectId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchTimeEntries(actorId, projectId) {
+  return (await request(`/api/projects/${projectId}/time-entries`, { actorId })).time_entries;
+}
+
+/**
+ * Log the acting user's hours on a project.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {object} entry - {work_date, hours, milestone_id?, note?}
+ * @returns {Promise<object[]>} the updated time entries
+ */
+export async function addTimeEntry(actorId, projectId, entry) {
+  return (await request(`/api/projects/${projectId}/time-entries`, {
+    method: 'POST', actorId, body: entry,
+  })).time_entries;
+}
+
+/**
+ * Fetch the project's budget summary (manager/admin).
+ * @param {string} actorId
+ * @param {string} projectId
+ * @returns {Promise<object>}
+ */
+export async function fetchBudget(actorId, projectId) {
+  return (await request(`/api/projects/${projectId}/budget`, { actorId })).budget;
+}
+
+/**
+ * List the project's expenses (manager/admin).
+ * @param {string} actorId
+ * @param {string} projectId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchExpenses(actorId, projectId) {
+  return (await request(`/api/projects/${projectId}/expenses`, { actorId })).expenses;
+}
+
+/**
+ * Record a project expense (manager/admin).
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {object} expense - {amount, description, incurred_on}
+ * @returns {Promise<object[]>} the updated expenses
+ */
+export async function addExpense(actorId, projectId, expense) {
+  return (await request(`/api/projects/${projectId}/expenses`, {
+    method: 'POST', actorId, body: expense,
+  })).expenses;
+}

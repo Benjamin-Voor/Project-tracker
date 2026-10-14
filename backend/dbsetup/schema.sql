@@ -412,6 +412,8 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_users_manager_id ON users(manager_id);
+-- Login is by email, so emails must be unique regardless of case.
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (lower(email));
 CREATE INDEX IF NOT EXISTS idx_projects_manager_id ON projects(manager_id);
 CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
 CREATE INDEX IF NOT EXISTS idx_project_allocations_project_id ON project_allocations(project_id);

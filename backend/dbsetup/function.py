@@ -1,14 +1,14 @@
 """
-Database setup: applies schema.sql and seeds the first admin.
+Database setup: applies schema.sql, seeds the first admin and optionally demo data.
 
 Aurora is only reachable from inside the VPC, so this runs as a Lambda.
 It only accepts direct invocation (aws lambda invoke); requests through the
 Function URL or CloudFront carry a requestContext and are refused.
 
-Payload:
-    {"admin_password": "<temporary password>"}   # optional; omit to only apply the schema
+Payload (all optional; {} only applies the schema):
+    {"admin_password": "<temporary password>", "demo": true}
 
-schema.sql is a copy of db/schema.sql; re-copy it after changing the schema.
+schema.sql and seed-demo.sql are copies of the files in db/; re-copy them after changing those.
 """
 
 import logging
@@ -31,6 +31,7 @@ PG_CONFIG = (
 )
 
 SCHEMA_SQL = Path(__file__).with_name("schema.sql").read_text()
+DEMO_SQL = Path(__file__).with_name("seed-demo.sql").read_text()
 
 # Same row as db/seed-admin.sql; does nothing if admin1 or the email exists.
 SEED_ADMIN_SQL = """
@@ -42,7 +43,7 @@ ON CONFLICT DO NOTHING
 
 
 def handler(event: Optional[dict[str, Any]] = None, context: Any = None) -> dict[str, Any]:
-    """Apply the schema and optionally seed admin1."""
+    """Apply the schema, then optionally seed admin1 and the demo data."""
     event = event or {}
     if "requestContext" in event:
         return {"statusCode": 404, "body": '{"error": "Not found"}'}
@@ -54,8 +55,16 @@ def handler(event: Optional[dict[str, Any]] = None, context: Any = None) -> dict
         password = event.get("admin_password")
         if isinstance(password, str) and len(password) >= 8:
             seeded = conn.execute(SEED_ADMIN_SQL, (password,)).rowcount == 1
+        if event.get("demo") is True:
+            conn.execute(DEMO_SQL)
+            logger.info("Demo data loaded")
         admins = conn.execute(
             "SELECT username FROM users WHERE role = 'admin' ORDER BY username"
         ).fetchall()
 
-    return {"schema": "applied", "admin1_created": seeded, "admins": [a[0] for a in admins]}
+    return {
+        "schema": "applied",
+        "admin1_created": seeded,
+        "demo": event.get("demo") is True,
+        "admins": [a[0] for a in admins],
+    }

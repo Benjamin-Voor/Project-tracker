@@ -56,8 +56,8 @@ export function AuthProvider({ children }) {
     setSessionUser(user);
   }, []);
 
-  const login = useCallback(async (username, password) => {
-    storeUser(await authApi.login(username, password));
+  const login = useCallback(async (email, password) => {
+    storeUser(await authApi.login(email, password));
   }, [storeUser]);
 
   const logout = useCallback(async () => {
@@ -69,6 +69,11 @@ export function AuthProvider({ children }) {
   const changePassword = useCallback(async (currentPassword, newPassword) => {
     storeUser(await authApi.changePassword(sessionUser.username, currentPassword, newPassword));
   }, [sessionUser, storeUser]);
+
+  const updateSessionUser = useCallback((changes) => {
+    storeUser({ ...sessionUser, ...changes });
+    refreshUsers();
+  }, [sessionUser, storeUser, refreshUsers]);
 
   const viewAs = useCallback((id) => {
     if (sessionUser?.role === 'admin') setViewAsId(id === sessionUser.id ? '' : id);
@@ -87,10 +92,12 @@ export function AuthProvider({ children }) {
       login,
       logout,
       changePassword,
+      updateSessionUser,
       viewAs,
       refreshUsers,
     };
-  }, [sessionUser, viewAsId, users, error, login, logout, changePassword, viewAs, refreshUsers]);
+  }, [sessionUser, viewAsId, users, error, login, logout, changePassword, updateSessionUser,
+    viewAs, refreshUsers]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -103,7 +110,8 @@ AuthProvider.propTypes = {
  * Access auth state and actions.
  * @returns {{sessionUser: object|null, currentUser: object|null, isViewingAs: boolean,
  *   users: object[], error: string, login: Function, logout: Function,
- *   changePassword: Function, viewAs: Function, refreshUsers: Function}}
+ *   changePassword: Function, updateSessionUser: Function, viewAs: Function,
+ *   refreshUsers: Function}}
  */
 export function useAuth() {
   return useContext(AuthContext);

@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import {
   Alert,
+  Button,
   Chip,
   CircularProgress,
   Paper,
@@ -12,15 +13,22 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import { editableFields } from './EditUserDialog';
 
 /**
- * Table of users with loading, error and empty states.
+ * Table of users with loading, error and empty states, and role-aware row actions.
  * @param {object} props
  * @param {object[]} props.users
  * @param {boolean} props.loading
  * @param {string} [props.error]
+ * @param {object} props.actor - the acting user
+ * @param {Function} props.onEdit
+ * @param {Function} props.onArchive
+ * @param {Function} props.onRestore
  */
-function UserTable({ users, loading, error }) {
+function UserTable({
+  users, loading, error, actor, onEdit, onArchive, onRestore,
+}) {
   if (loading) return <CircularProgress />;
   if (error) return <Alert severity="error">{error}</Alert>;
   if (users.length === 0) return <Typography>No users found.</Typography>;
@@ -35,20 +43,40 @@ function UserTable({ users, loading, error }) {
             <TableCell>Email</TableCell>
             <TableCell>Role</TableCell>
             <TableCell>Job title</TableCell>
+            <TableCell align="right">Salary</TableCell>
             <TableCell>Created</TableCell>
+            <TableCell />
           </TableRow>
         </TableHead>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>{`${user.first_name} ${user.last_name}`}</TableCell>
+          {users.map((user) => {
+            const canEdit = !user.is_archived && editableFields(actor, user).length > 0;
+            const canArchive = !user.is_archived && user.id !== actor.id
+              && (actor.role === 'admin' || (actor.role === 'manager' && user.manager_id === actor.id));
+            return (
+            <TableRow key={user.id} sx={user.is_archived ? { opacity: 0.6 } : undefined}>
+              <TableCell>
+                {`${user.first_name} ${user.last_name}`}
+                {user.is_archived && <Chip size="small" label="archived" sx={{ ml: 1 }} />}
+              </TableCell>
               <TableCell>{user.username}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell><Chip size="small" label={user.role} /></TableCell>
               <TableCell>{user.job_title || '-'}</TableCell>
+              <TableCell align="right">
+                {user.salary == null ? '-' : Number(user.salary).toLocaleString()}
+              </TableCell>
               <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                {canEdit && <Button size="small" onClick={() => onEdit(user)}>Edit</Button>}
+                {canArchive && <Button size="small" onClick={() => onArchive(user)}>Archive</Button>}
+                {actor.role === 'admin' && user.is_archived && (
+                  <Button size="small" onClick={() => onRestore(user)}>Restore</Button>
+                )}
+              </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </TableContainer>
@@ -64,10 +92,20 @@ UserTable.propTypes = {
     email: PropTypes.string,
     role: PropTypes.string,
     job_title: PropTypes.string,
+    salary: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    manager_id: PropTypes.string,
+    is_archived: PropTypes.bool,
     created_at: PropTypes.string,
   })).isRequired,
   loading: PropTypes.bool.isRequired,
   error: PropTypes.string,
+  actor: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    role: PropTypes.string.isRequired,
+  }).isRequired,
+  onEdit: PropTypes.func.isRequired,
+  onArchive: PropTypes.func.isRequired,
+  onRestore: PropTypes.func.isRequired,
 };
 
 UserTable.defaultProps = {

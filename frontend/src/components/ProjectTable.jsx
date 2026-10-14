@@ -27,13 +27,14 @@ export function canManageProject(user, project) {
  * @param {object} props
  * @param {object[]} props.projects
  * @param {object} props.currentUser
+ * @param {Function} props.onOpen
  * @param {Function} props.onEdit
  * @param {Function} props.onAllocations
  * @param {Function} props.onArchive
  * @param {Function} props.onRestore
  */
 function ProjectTable({
-  projects, currentUser, onEdit, onAllocations, onArchive, onRestore,
+  projects, currentUser, onOpen, onEdit, onAllocations, onArchive, onRestore,
 }) {
   if (projects.length === 0) return <Typography>No projects to show.</Typography>;
 
@@ -70,6 +71,7 @@ function ProjectTable({
                 <TableCell>{project.status.replace('_', ' ')}</TableCell>
                 <TableCell align="right">{project.allocation_count}</TableCell>
                 <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                  <Button size="small" variant="outlined" onClick={() => onOpen(project)}>Open</Button>
                   <Button size="small" onClick={() => onAllocations(project)}>Team</Button>
                   {manage && !project.is_archived && (
                     <Button size="small" onClick={() => onEdit(project)}>Edit</Button>
@@ -108,6 +110,7 @@ ProjectTable.propTypes = {
     id: PropTypes.string.isRequired,
     role: PropTypes.string.isRequired,
   }).isRequired,
+  onOpen: PropTypes.func.isRequired,
   onEdit: PropTypes.func.isRequired,
   onAllocations: PropTypes.func.isRequired,
   onArchive: PropTypes.func.isRequired,

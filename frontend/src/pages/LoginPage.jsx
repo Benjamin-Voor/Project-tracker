@@ -2,14 +2,15 @@ import { useState } from 'react';
 import {
   Alert, Box, Button, Container, Paper, Stack, TextField, Typography,
 } from '@mui/material';
+import PasswordField from '../components/PasswordField';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Username + password login form.
+ * Email + password login form.
  */
 function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -19,7 +20,7 @@ function LoginPage() {
     setSubmitting(true);
     setError('');
     try {
-      await login(username.trim(), password);
+      await login(email.trim(), password);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -34,17 +35,17 @@ function LoginPage() {
           <Typography variant="h5" component="h1">Project Tracker</Typography>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             autoFocus
             required
             autoComplete="username"
-            slotProps={{ htmlInput: { maxLength: 6 } }}
+            slotProps={{ htmlInput: { maxLength: 255 } }}
           />
-          <TextField
+          <PasswordField
             label="Password"
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

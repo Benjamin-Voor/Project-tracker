@@ -68,27 +68,34 @@ def _find_verified(cur: Any, username: str, password: str) -> Optional[dict[str,
     return cur.fetchone()
 
 
-def _record_failure(cur: Any, username: str) -> None:
+def _record_failure(cur: Any, column: str, value: str) -> None:
     """Audit a failed login without storing the attempted password."""
-    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+    where = "lower(email) = lower(%s)" if column == "email" else "username = %s"
+    cur.execute(f"SELECT id FROM users WHERE {where}", (value,))
     row = cur.fetchone()
-    _audit(cur, "login_failed", None, row["id"] if row else None, {"username": username})
+    _audit(cur, "login_failed", None, row["id"] if row else None, {column: value})
 
 
-def login(config: str, username: str, password: str) -> Optional[dict[str, Any]]:
+def login(config: str, email: str, password: str) -> Optional[dict[str, Any]]:
     """
-    Verify credentials and audit the attempt.
+    Verify an email + password (email is case-insensitive) and audit the attempt.
 
     Returns:
         The session user on success, or None if the credentials are wrong.
     """
     conn = _conn(config)
     with conn.transaction(), conn.cursor() as cur:
-        user = _find_verified(cur, username, password)
+        cur.execute(
+            f"SELECT {SESSION_COLUMNS} FROM users "
+            "WHERE lower(email) = lower(%s) AND is_archived = false "
+            "AND password_hash = crypt(%s, password_hash)",
+            (email, password),
+        )
+        user = cur.fetchone()
         if user is None:
-            _record_failure(cur, username)
+            _record_failure(cur, "email", email)
             return None
-        _audit(cur, "login", user, user["id"], {"username": username})
+        _audit(cur, "login", user, user["id"], {"email": email})
         return user
 
 
@@ -105,7 +112,7 @@ def change_password(
     with conn.transaction(), conn.cursor() as cur:
         user = _find_verified(cur, username, current_password)
         if user is None:
-            _record_failure(cur, username)
+            _record_failure(cur, "username", username)
             return None
         cur.execute(
             "UPDATE users SET password_hash = crypt(%s, gen_salt('bf')), "

@@ -1,13 +1,13 @@
 import { request } from './api';
 
 /**
- * Log in with username and password.
- * @param {string} username
+ * Log in with email and password.
+ * @param {string} email
  * @param {string} password
  * @returns {Promise<object>} the session user
  */
-export async function login(username, password) {
-  return (await request('/api/auth/login', { method: 'POST', body: { username, password } })).user;
+export async function login(email, password) {
+  return (await request('/api/auth/login', { method: 'POST', body: { email, password } })).user;
 }
 
 /**

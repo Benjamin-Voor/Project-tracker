@@ -14,7 +14,6 @@ import {
 import { createUser } from '../services/users';
 
 const EMPTY_FORM = {
-  username: '',
   first_name: '',
   last_name: '',
   email: '',
@@ -26,7 +25,7 @@ const EMPTY_FORM = {
 };
 
 /**
- * Dialog form for creating a user.
+ * Dialog form for creating a user; the server generates the 6-character username.
  * @param {object} props
  * @param {boolean} props.open
  * @param {string} props.actorId - the acting admin
@@ -91,14 +90,15 @@ function AddUserDialog({ open, actorId, managers, onClose, onCreated }) {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            {field('username', 'Username (6 characters)', {
-              required: true,
-              slotProps: { htmlInput: { maxLength: 6, minLength: 6 } },
-            })}
             {field('first_name', 'First name', { required: true })}
             {field('last_name', 'Last name', { required: true })}
-            {field('email', 'Email', { required: true, type: 'email' })}
-            {field('password', 'Temporary password', { required: true, type: 'password' })}
+            {field('email', 'Email', { required: true, type: 'email', autoComplete: 'off' })}
+            {field('password', 'Temporary password (min. 8 characters)', {
+              required: true,
+              type: 'password',
+              autoComplete: 'new-password',
+              slotProps: { htmlInput: { minLength: 8 } },
+            })}
             {field('role', 'Role', { select: true, required: true, children: [
               <MenuItem key="admin" value="admin">Admin</MenuItem>,
               <MenuItem key="manager" value="manager">Manager</MenuItem>,

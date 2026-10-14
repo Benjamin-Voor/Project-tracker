@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 import {
-  Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Stack, TextField,
+  Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Stack,
 } from '@mui/material';
+import PasswordField from './PasswordField';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -13,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
  * @param {boolean} props.required
  * @param {Function} props.onClose - called after success or cancel (optional dialogs only)
  */
-function ChangePasswordDialog({ open, required, onClose }) {
+function ChangePasswordDialog({ open, required = false, onClose = () => {} }) {
   const { changePassword, logout } = useAuth();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -64,26 +65,23 @@ function ChangePasswordDialog({ open, required, onClose }) {
               </DialogContentText>
             )}
             {error && <Alert severity="error">{error}</Alert>}
-            <TextField
+            <PasswordField
               label="Current password"
-              type="password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               required
               autoComplete="current-password"
             />
-            <TextField
+            <PasswordField
               label="New password (8+ characters)"
-              type="password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
               required
               autoComplete="new-password"
               slotProps={{ htmlInput: { minLength: 8, maxLength: 72 } }}
             />
-            <TextField
+            <PasswordField
               label="Confirm new password"
-              type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
@@ -106,11 +104,6 @@ ChangePasswordDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   required: PropTypes.bool,
   onClose: PropTypes.func,
-};
-
-ChangePasswordDialog.defaultProps = {
-  required: false,
-  onClose: () => {},
 };
 
 export default ChangePasswordDialog;

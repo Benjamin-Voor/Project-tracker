@@ -15,9 +15,11 @@ import ProjectFormDialog from '../components/ProjectFormDialog';
 import ProjectTable, { canManageProject } from '../components/ProjectTable';
 import { useAuth } from '../context/AuthContext';
 import { archiveProject, fetchProjects, restoreProject } from '../services/projects';
+import ProjectDetail from './ProjectDetail';
 
 /**
- * Projects page: role-aware list with create, edit, archive and team allocation.
+ * Projects page: role-aware list with create, edit, archive and team allocation;
+ * "Open" shows one project's milestones, time log and budget.
  */
 function ProjectsPage() {
   const { users, currentUser } = useAuth();
@@ -28,6 +30,7 @@ function ProjectsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [teamProject, setTeamProject] = useState(null);
+  const [openId, setOpenId] = useState(null);
   const [notice, setNotice] = useState('');
 
   const actorId = currentUser?.id;
@@ -51,6 +54,10 @@ function ProjectsPage() {
     loadProjects();
   }, [loadProjects]);
 
+  useEffect(() => {
+    setOpenId(null);
+  }, [actorId]);
+
   if (!currentUser) {
     return <Container sx={{ py: 4 }}><Alert severity="info">Choose a user in &quot;Acting as&quot; to continue.</Alert></Container>;
   }
@@ -73,9 +80,21 @@ function ProjectsPage() {
   const teamProjectCurrent = teamProject
     ? projects.find((p) => p.id === teamProject.id) || teamProject
     : null;
+  const openProject = projects.find((p) => p.id === openId) || null;
 
   return (
     <Container sx={{ py: 4 }}>
+      {openProject ? (
+        <ProjectDetail
+          project={openProject}
+          actorId={actorId}
+          canManage={canManageProject(currentUser, openProject)}
+          onBack={() => setOpenId(null)}
+          onEdit={() => openForm(openProject)}
+          onTeam={() => setTeamProject(openProject)}
+        />
+      ) : (
+      <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">Projects</Typography>
         <Box>
@@ -93,11 +112,14 @@ function ProjectsPage() {
         <ProjectTable
           projects={projects}
           currentUser={currentUser}
+          onOpen={(p) => setOpenId(p.id)}
           onEdit={openForm}
           onAllocations={setTeamProject}
           onArchive={(p) => runAction(() => archiveProject(actorId, p.id), `Archived ${p.name}`)}
           onRestore={(p) => runAction(() => restoreProject(actorId, p.id), `Restored ${p.name}`)}
         />
+      )}
+      </>
       )}
       <ProjectFormDialog
         open={formOpen}

@@ -1,5 +1,6 @@
 """
-Projects service: project CRUD, archive/restore and employee allocation.
+Projects service: project CRUD, archive/restore, employee allocation, milestones,
+time entries, expenses and the budget summary.
 
 The client sends only `actor_id`; the role is looked up in the database.
 """
@@ -154,6 +155,108 @@ def validate_project(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any
     return clean, errors
 
 
+MILESTONE_STATUSES = ("not_started", "in_progress", "completed")
+
+
+def _text(data: dict[str, Any], field: str, errors: dict[str, str], required: bool, limit: int = 0) -> None:
+    """Validate an optional/required text field in place: strip it, or record an error."""
+    value = data.get(field)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        if required:
+            errors[field] = "required"
+        else:
+            data[field] = None
+        return
+    if not isinstance(value, str):
+        errors[field] = "must be text"
+    elif limit and len(value.strip()) > limit:
+        errors[field] = f"must be at most {limit} characters"
+    else:
+        data[field] = value.strip()
+
+
+def validate_milestone(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate milestone input; with partial=True only supplied fields are checked."""
+    errors: dict[str, str] = {}
+    clean: dict[str, Any] = {}
+    if "name" in data or not partial:
+        _text(data, "name", errors, required=True, limit=255)
+        if "name" not in errors:
+            clean["name"] = data["name"]
+    for field in ("goal", "deliverables", "completion_criteria"):
+        if field in data:
+            _text(data, field, errors, required=False)
+            if field not in errors:
+                clean[field] = data[field]
+    for field in ("start_date", "end_date"):
+        if field in data or not partial:
+            parsed = _parse_date(data.get(field))
+            if parsed is None:
+                errors[field] = "must be a date (YYYY-MM-DD)"
+            else:
+                clean[field] = parsed
+    if "start_date" in clean and "end_date" in clean and clean["end_date"] < clean["start_date"]:
+        errors["end_date"] = "must not be before start_date"
+    if "status" in data:
+        if data["status"] not in MILESTONE_STATUSES:
+            errors["status"] = f"must be one of {', '.join(MILESTONE_STATUSES)}"
+        else:
+            clean["status"] = data["status"]
+    return clean, errors
+
+
+def validate_time_entry(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate a time entry: date, hours (0-24], optional milestone and note."""
+    errors: dict[str, str] = {}
+    clean: dict[str, Any] = {}
+    work_date = _parse_date(data.get("work_date"))
+    if work_date is None:
+        errors["work_date"] = "must be a date (YYYY-MM-DD)"
+    elif work_date > date.today():
+        errors["work_date"] = "cannot be in the future"
+    else:
+        clean["work_date"] = work_date
+    try:
+        hours = float(data.get("hours"))
+        if not 0 < hours <= 24:
+            raise ValueError
+        clean["hours"] = hours
+    except (TypeError, ValueError):
+        errors["hours"] = "must be more than 0 and at most 24"
+    milestone_id = data.get("milestone_id")
+    if milestone_id not in (None, ""):
+        if not _is_uuid(milestone_id):
+            errors["milestone_id"] = "invalid milestone"
+        else:
+            clean["milestone_id"] = milestone_id
+    _text(data, "note", errors, required=False)
+    if "note" not in errors:
+        clean["note"] = data.get("note")
+    return clean, errors
+
+
+def validate_expense(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate an expense: non-negative amount, description and date."""
+    errors: dict[str, str] = {}
+    clean: dict[str, Any] = {}
+    try:
+        amount = float(data.get("amount"))
+        if amount < 0:
+            raise ValueError
+        clean["amount"] = amount
+    except (TypeError, ValueError):
+        errors["amount"] = "must be a non-negative number"
+    _text(data, "description", errors, required=True)
+    if "description" not in errors:
+        clean["description"] = data["description"]
+    incurred_on = _parse_date(data.get("incurred_on"))
+    if incurred_on is None:
+        errors["incurred_on"] = "must be a date (YYYY-MM-DD)"
+    else:
+        clean["incurred_on"] = incurred_on
+    return clean, errors
+
+
 def _require_actor(params: dict[str, str]) -> dict[str, Any]:
     """Resolve the acting user from actor_id or raise 401."""
     actor_id = params.get("actor_id")
@@ -268,6 +371,79 @@ def _route(event: dict[str, Any]) -> dict[str, Any]:
             return _response(200, {"allocations": db.remove_allocation(
                 PG_CONFIG, actor, project_id, sub[1])})
 
+    if sub[0] == "milestones":
+        return _milestone_route(event, method, actor, project, can_manage, sub[1:])
+
+    if sub == ["time-entries"]:
+        if method == "GET":
+            only_user = None if can_manage else str(actor["id"])
+            return _response(200, {"time_entries": db.list_time_entries(PG_CONFIG, project_id, only_user)})
+        if method == "POST":
+            if project["is_archived"]:
+                raise HttpError(409, {"error": "Project is archived"})
+            clean, errors = validate_time_entry(_parse_body(event))
+            if errors:
+                raise HttpError(400, {"error": "Validation failed", "fields": errors})
+            db.add_time_entry(PG_CONFIG, actor, project_id, clean)
+            only_user = None if can_manage else str(actor["id"])
+            return _response(201, {"time_entries": db.list_time_entries(PG_CONFIG, project_id, only_user)})
+
+    if sub == ["expenses"] or sub == ["budget"]:
+        if not can_manage:
+            raise _forbid("Only the project's manager or an admin can see the budget")
+        if sub == ["budget"] and method == "GET":
+            return _response(200, {"budget": db.get_budget(PG_CONFIG, project_id)})
+        if sub == ["expenses"] and method == "GET":
+            return _response(200, {"expenses": db.list_expenses(PG_CONFIG, project_id)})
+        if sub == ["expenses"] and method == "POST":
+            clean, errors = validate_expense(_parse_body(event))
+            if errors:
+                raise HttpError(400, {"error": "Validation failed", "fields": errors})
+            return _response(201, {"expenses": db.add_expense(PG_CONFIG, actor, project_id, clean)})
+
+    raise HttpError(404, {"error": "Route not found"})
+
+
+def _milestone_route(
+    event: dict[str, Any],
+    method: str,
+    actor: dict[str, Any],
+    project: dict[str, Any],
+    can_manage: bool,
+    sub: list[str],
+) -> dict[str, Any]:
+    """Handle /projects/{id}/milestones[/{milestone_id}[/archive|/assignments[/{user_id}]]]."""
+    project_id = str(project["id"])
+    if not sub and method == "GET":
+        return _response(200, {"milestones": db.list_milestones(PG_CONFIG, project_id)})
+    if not can_manage:
+        raise _forbid("Only the project's manager or an admin can change milestones")
+    if project["is_archived"]:
+        raise HttpError(409, {"error": "Project is archived"})
+    if not sub and method == "POST":
+        clean, errors = validate_milestone(_parse_body(event), partial=False)
+        if errors:
+            raise HttpError(400, {"error": "Validation failed", "fields": errors})
+        return _response(201, {"milestones": db.create_milestone(PG_CONFIG, actor, project_id, clean)})
+
+    if not sub or not _is_uuid(sub[0]) or db.get_milestone(PG_CONFIG, project_id, sub[0]) is None:
+        raise HttpError(404, {"error": "Milestone not found"})
+    milestone_id, rest = sub[0], sub[1:]
+
+    if not rest and method in ("PATCH", "PUT"):
+        clean, errors = validate_milestone(_parse_body(event), partial=True)
+        if errors:
+            raise HttpError(400, {"error": "Validation failed", "fields": errors})
+        return _response(200, {"milestones": db.update_milestone(PG_CONFIG, actor, project_id, milestone_id, clean)})
+    if rest == ["archive"] and method == "POST":
+        return _response(200, {"milestones": db.archive_milestone(PG_CONFIG, actor, project_id, milestone_id)})
+    if rest == ["assignments"] and method == "POST":
+        user_id = _parse_body(event).get("user_id")
+        if not _is_uuid(user_id):
+            raise HttpError(400, {"error": "Validation failed", "fields": {"user_id": "required"}})
+        return _response(201, {"milestones": db.assign_milestone(PG_CONFIG, actor, project_id, milestone_id, user_id)})
+    if len(rest) == 2 and rest[0] == "assignments" and method == "DELETE" and _is_uuid(rest[1]):
+        return _response(200, {"milestones": db.unassign_milestone(PG_CONFIG, actor, project_id, milestone_id, rest[1])})
     raise HttpError(404, {"error": "Route not found"})
 
 

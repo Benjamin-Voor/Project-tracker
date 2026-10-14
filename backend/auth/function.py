@@ -1,8 +1,8 @@
 """
-Auth service: simple username + password login (no tokens).
+Auth service: simple email + password login (no tokens).
 
 Routes (relative to the service path):
-    POST /login     {username, password}
+    POST /login     {email, password}
     POST /password  {username, current_password, new_password}
     POST /logout    {actor_id}
 """
@@ -33,7 +33,7 @@ MAX_PASSWORD_LENGTH = 72  # bcrypt ignores everything past 72 bytes
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
-INVALID_CREDENTIALS = {"error": "Invalid username or password"}
+INVALID_CREDENTIALS = {"error": "Invalid email or password"}
 
 
 class HttpError(Exception):
@@ -100,7 +100,7 @@ def _route(event: dict[str, Any]) -> dict[str, Any]:
     route = segments[0]
 
     if route == "login":
-        user = db.login(PG_CONFIG, _text(body, "username", 6), _text(body, "password", MAX_PASSWORD_LENGTH))
+        user = db.login(PG_CONFIG, _text(body, "email", 255), _text(body, "password", MAX_PASSWORD_LENGTH))
         if user is None:
             raise HttpError(401, INVALID_CREDENTIALS)
         return _response(200, {"user": user})
