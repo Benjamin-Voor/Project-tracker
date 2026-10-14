@@ -18,7 +18,8 @@ Deploys with the repo's scripts ([bin/README.md](../../../bin/README.md)). AWS c
 | First deploy ever | 1 → 2 (with admin password) → 3 → 4 |
 | Backend code (`backend/*`) or new Lambda folder | 1 → 4 |
 | Frontend code (`frontend/*`) | 3 → 4 |
-| `db/schema.sql` | copy schema → 1 → 2 (no password) → 4 |
+| `db/schema.sql` or `db/seed-demo.sql` | copy files → 1 → 2 → 4 |
+| Load demo data | 2 with `{"demo": true}` |
 | Infra (`infra/*`) | 1 → 4 |
 
 If unsure, run 1 → 3 → 4. Both scripts are idempotent.
@@ -37,10 +38,10 @@ source ~/.bashrc
 
 Aurora is private to the VPC, so the schema can't be applied with local `psql`. [backend/dbsetup/function.py](../../../backend/dbsetup/function.py) applies its copy of the schema and optionally seeds `admin1`. It only accepts direct invocation; web requests get 404.
 
-After a schema change, first refresh its copy:
+After changing the schema or demo seed, first refresh the copies:
 
 ```bash
-cp db/schema.sql backend/dbsetup/schema.sql
+cp db/schema.sql db/seed-demo.sql backend/dbsetup/
 ```
 
 Invoke (credentials must be sourced in the same shell):
@@ -53,6 +54,7 @@ aws lambda invoke --function-name "coding-workshop-dbsetup-$PARTICIPANT_ID" \
 ```
 
 - To seed `admin1` (first deploy only), use `--payload "{\"admin_password\":\"$PW\"}"` with `PW=$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-14)`, and give the user the password — it can't be recovered later. `admin1` must change it at first login. Seeding does nothing if `admin1` already exists.
+- To load the demo users and projects ([db/seed-demo.sql](../../../db/seed-demo.sql); password `Demo1234!` for every demo user), use `--payload '{"demo": true}'`. Safe to re-run.
 - Expect `{"schema": "applied", ...}`. A timeout usually means Aurora was paused (min capacity 0); retry after ~20 s.
 
 ## 3. Frontend
@@ -71,7 +73,7 @@ U=<website_url>
 curl -s -o /dev/null -w "page %{http_code}\n" $U/
 curl -s $U/$(curl -s $U/ | grep -oE 'assets/index-[^"]+\.js') | grep -c localhost:3001   # expect 0
 curl -s -w " [%{http_code}]\n" -X POST -H 'Content-Type: application/json' \
-  -d '{"username":"admin1","password":"wrong-pass"}' $U/api/auth/login                 # expect 401
+  -d '{"email":"admin@example.com","password":"wrong-pass"}' $U/api/auth/login                 # expect 401
 ```
 
 Note: CloudFront maps every 404 to `/index.html` with 200 ([infra/cloudfront.tf](../../../infra/cloudfront.tf)), so an API 404 shows up as HTML. Check a Lambda's real response at its direct URL from `lambda_urls`.

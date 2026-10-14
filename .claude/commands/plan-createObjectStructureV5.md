@@ -1,0 +1,1 @@
+../../.github/prompts/plan-createObjectStructureV5.prompt.md

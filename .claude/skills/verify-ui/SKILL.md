@@ -23,7 +23,7 @@ Needs a browser tool (VS Code integrated browser: `open_browser_page`, `read_pag
 
 - `open_browser_page` with `forceNew: true` and `http://localhost:3000/`. A new tab has empty `sessionStorage`, so it shows the login page.
 - The user's own tab is theirs. It is often hidden ("not visible"), which makes clicks time out, so do not try to reuse it.
-- Log in with `type_in_page` (username, then password with `submit: true`). Wrong credentials create `login_failed` audit rows; do not retry blindly.
+- Log in with `type_in_page` (email, then password with `submit: true`). Wrong credentials create `login_failed` audit rows; do not retry blindly.
 
 ## 3. Tool tips
 
@@ -38,7 +38,7 @@ Needs a browser tool (VS Code integrated browser: `open_browser_page`, `read_pag
 Admin:
 - Projects: list, "Show archived", New project, Open (tabs Milestones / Time / Budget), Team, Edit, Archive.
 - Users tab: Users and Audit log sub-tabs, Add user, Edit, Archive, salary column.
-- Profile and Password dialogs open and cancel cleanly. Profile always shows the logged-in user (for example `admin1`), even while viewing as someone else. That is intended (owner decision), not a bug.
+- Profile and Password dialogs open and cancel cleanly. Profile shows the "View as" user while viewing as someone else (owner decision); the app-bar name stays the logged-in admin.
 
 View as a manager (own projects only):
 - No "New project"; Edit, Team and Archive on own projects; Users tab hidden.

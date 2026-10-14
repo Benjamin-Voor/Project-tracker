@@ -26,35 +26,55 @@ When requirements are ambiguous, prefer these files over older drafts such as [d
   - Employee-to-project is many-to-many through `project_allocations`; an allocation requires the employee's manager to match the project manager.
   - Milestone-to-employee is one-to-many through `milestone_assignments` (many assignees per milestone). Archiving a milestone detaches its employees.
   - Archival is handled via `is_archived` and `archived_at` fields instead of a separate archive table. Nothing is hard-deleted.
-  - Usernames are 6 characters and meant to be auto-generated.
+  - Usernames are 6 characters and auto-generated (workshop brief). They are an internal id; people sign in with their email (owner decision, 2026-10-14).
 
 ## Owner decisions
 
 These override anything else in this repo, including agent suggestions.
 
-- Authentication: simple login, no tokens. Role checks are enforced in the UI; the backend cannot fully trust a client-sent role.
+- Authentication and authorization are explicit design goals: [Workshop_Guidance.md](Workshop_Guidance.md) lists "User authentication and authorization" and "Role-based access control" as required features (owner, 2026-10-14). Current approach: simple login, no tokens. Role checks are enforced in the UI; the backend cannot fully trust a client-sent role.
 - Admin: everything a manager and employee can do; creates users (employees and admins) and projects; un-archives projects; sole viewer of archived projects and audit logs.
 - Manager: everything an employee can do; cannot create projects; edits their projects (including start/end dates), adjusts budget, creates milestones, assigns employees to their projects, edits/archives employees on their team, and archives a project only after all its milestones are done.
 - Employee: views their assigned projects, logs time, and edits only their own name and email.
 - Deploy to both LocalStack and AWS; deploy early.
-- Authentication (started 2026-10-14, reversing the earlier "deferred" decision): simple username + password login, no tokens. The browser keeps only the user in `sessionStorage`; the client still sends `actor_id` and the backend looks up the role. Login, failed login and logout are written to `audit_log`.
+- Authentication (started 2026-10-14; a required feature, not optional): simple login, no tokens; email + password since 2026-10-14 (email matched case-insensitively, unique via `users_email_lower_unique`). The browser keeps only the user in `sessionStorage`; the client still sends `actor_id` and the backend looks up the role. Login, failed login and logout are written to `audit_log`.
 - Admins may keep an "acting as" picker to view the app as another user (demos only). Everyone else loses the picker.
 - No bootstrap page: the first admin is seeded with SQL ([db/seed-admin.sql](db/seed-admin.sql)). A seeded or admin-created user must change their password on first login (`users.must_change_password`).
 - `/api/users` requires `actor_id`; only admins can create users.
-- Profile: the app-bar "Profile" button always shows the logged-in user (for example `admin1`), even while an admin is viewing as someone else (owner decision, 2026-10-14).
-- Browser: for UI checks the agent opens its own tab (`forceNew`); the owner keeps the human tab and the agent does not drive it.
-- Next feature to build: projects (CRUD, manager and employee allocation).
+- Priorities: projects came first (built); authentication followed as a required workshop feature. Next feature is not yet chosen.
 - Fixed (owner approved): the `validate_milestone_dependency()` typo in [db/schema.sql](db/schema.sql) now uses `depends_on_milestone_id`.
+- Source of truth for the data model is [db/schema.sql](db/schema.sql) as-is, not V4/V5. Milestones have many assignees.
+- Local first: the app must work locally before it is deployed. Fix packaging problems locally and do not deploy speculatively.
+- Ask before running `bin/deploy-*.sh`, `bin/cleanup-environment.sh` (it runs `terraform destroy` with no prompt), or anything that restarts the owner's running dev processes (`start-dev.sh`, the proxy on port 3001).
+- Restart after backend changes (2026-10-14, from [docs/full-stack.md](docs/full-stack.md)): after creating a new backend service, or after running `./bin/deploy-backend.sh local`, the dev environment must be restarted with `./bin/start-dev.sh`. The local deploy can give the Lambdas new Function URLs, and the proxy on port 3001 only reads them at startup, so until it restarts every API call returns 403. Agents must tell the owner plainly, every time, that a restart is needed and why. Do not run it without asking (see the rule below).
+- Git: commits stay local. Never push; `origin` points at the citi repo and the owner will switch remotes later. Commit only the files for the feature at hand. Leave out `TuesdayNotes.md`, notes and draft files, the vendored `backend/*/psycopg*` folders and `.pip_installed` markers (created by `bin/start-dev.sh`), and the owner's own edits to `bin/start-dev.sh` and `docs/README.md`.
+- `TuesdayNotes.md` holds credentials, so it is excluded from git locally (`.git/info/exclude`). AI tools must still read it; do not add it to `.aiexclude`.
+- Stray files named `tgres123 psql ...` in the repo root were not created by the agent; leave them unless the owner asks to delete them.
+- AI tools (2026-10-14): Copilot and Claude Code share instructions. `CLAUDE.md` imports this file and `.github/instructions/*.md` with `@path`; `.claude/commands/` symlinks to `.github/prompts/`; `.claude/settings.json` mirrors `.aiexclude` as read-deny rules. Edit the Copilot files, not copies.
+- Working style: owner decisions beat agent suggestions; ask for decisions that are the owner's to make; record every answer in this file (the agent's private memory is not visible to other tools).
+- Profile (changed 2026-10-14, replacing the earlier "always the logged-in user" decision): the app-bar "Profile" button shows the "View as" user, so an admin can test a manager's or employee's profile. Saves are recorded under that user, like everything else done while viewing as someone.
+- Local test users (2026-10-14): the keyboard-mash users were renamed in place (not deleted) to superhero alter egos with `DefinitelyNot…@example.com` emails: Bruce Wayne (admin, `gjmhjg`), Clark Kent (manager, `dgfte2`), Diana Prince (employee, `34yerh`). Their password is one the owner typed in chat; it is not stored in the repo. John Jameson and Peter Parker were created by the owner.
+- Browser: for UI checks the agent opens its own tab (`forceNew`); the owner keeps the human tab and the agent does not drive it.
+
+## Open questions
+
+- With authorization a stated requirement, is "no tokens" still enough? The backend trusts the client-sent `actor_id`, so anyone who calls the API directly can act as any user. Options: keep it (workshop scope) or add a server-checked session token. Unanswered.
+- Removing an employee from a project hard-deletes the `project_allocations` row (the table has no archive column). Keep that, or add an archive column to the schema? Unanswered.
+- Whether to add `backend/*/psycopg*` and `.pip_installed` to `.gitignore`. Unanswered.
+- Login rate limiting is not started.
+- Milestone dependencies (`milestone_dependencies`) have no API or UI; the workshop notes don't ask for them.
 
 ## Current state
 
-- Done: `backend/users` Lambda (GET list, POST create) and the frontend admin page (`AdminPage`, `AddUserDialog`, `UserTable`, `services/users.js`). The user form still asks for a typed username instead of generating one.
+- Done: `backend/users` Lambda: list, create (admin; 6-character username generated), `PATCH /{id}` (self: name/email; manager: own team incl. job title/salary; admin: also an employee's manager), `/{id}/archive` (manager: own team; admin), `/{id}/restore` (admin), `GET /audit` (admin). Frontend: `AdminPage` (admin "Users" + "Audit log" tabs; managers see "My team"), `EditUserDialog`, "Profile" in the app bar.
 - Done: `backend/projects` Lambda (list, create, edit, archive/restore, allocations; every request needs `actor_id`) and the frontend Projects page. Handler tested locally against Postgres.
+- Done (tested against a throwaway database; not yet run in the browser or deployed): sub-routes of `/api/projects/{id}`: `milestones` (create/edit/status, assign/unassign allocated employees, archive detaches assignees), `time-entries` (log own hours; managers/admins see all), `expenses` and `budget` (manager/admin; uses the `project_budget_summary` view: logged hours × salary/2080 + expenses). Frontend: "Open" on a project shows `ProjectDetail` with Milestones, Time and Budget tabs.
+- Demo data: [db/seed-demo.sql](db/seed-demo.sql) (2 managers, 6 employees, 3 projects; every demo user's password is `Demo1234!`). On AWS invoke `dbsetup` with `{"demo": true}`.
 - Done (not yet deployed or run in the browser): `backend/auth` Lambda (`/login`, `/password`, `/logout`), login page, forced password change, admin-only "View as" picker, `/api/users` scoped by role and admin-only create, `users.must_change_password`, [db/seed-admin.sql](db/seed-admin.sql). Handlers tested against a throwaway Postgres database.
 - To run auth locally: re-apply [db/schema.sql](db/schema.sql) (adds `must_change_password`), seed the admin with [db/seed-admin.sql](db/seed-admin.sql), then deploy with `./bin/start-dev.sh`.
-- AWS database setup: Aurora is private to the VPC, so `backend/dbsetup` (direct `aws lambda invoke` only) applies its copy of the schema and seeds `admin1`. Re-copy [db/schema.sql](db/schema.sql) into `backend/dbsetup/` after schema changes.
-- Not done: milestones, time entries, expenses, audit log viewer, username auto-generation, login rate limiting.
-- Known issue: `npm run lint` in `frontend/` fails because `eslint-plugin-react-hooks` is not installed.
+- AWS database setup: Aurora is private to the VPC, so `backend/dbsetup` (direct `aws lambda invoke` only) applies its copy of the schema, seeds `admin1` and optionally the demo data. Re-copy [db/schema.sql](db/schema.sql) and [db/seed-demo.sql](db/seed-demo.sql) into `backend/dbsetup/` after changing them.
+- Not done: login rate limiting, milestone dependencies.
+- Lint: `npm run lint` passes; `react-hooks/set-state-in-effect` and `react-refresh/only-export-components` are warnings (data loading and form resets in effects is the codebase's pattern).
 
 ## Repo structure
 

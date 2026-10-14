@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/node_modules/**)",
+      "Read(./.git/**)",
+      "Read(**/.venv/**)",
+      "Read(**/venv/**)",
+      "Read(**/env/**)",
+      "Read(**/__pycache__/**)",
+      "Read(**/*.pyc)",
+      "Read(**/*.pyo)",
+      "Read(**/*.pyd)",
+      "Read(**/*.log)",
+      "Read(**/*.tmp)",
+      "Read(**/*.swp)",
+      "Read(**/*.bak)",
+      "Read(**/.DS_Store)",
+      "Read(**/Thumbs.db)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.local)",
+      "Read(**/.local/**)",
+      "Read(**/coverage/**)",
+      "Read(**/.dist/**)",
+      "Read(**/build/**)",
+      "Read(**/dist/**)",
+      "Read(**/.cache/**)",
+      "Read(**/*.min.js)",
+      "Read(**/*.map)",
+      "Read(**/*.zip)",
+      "Read(**/*.tar)",
+      "Read(**/*.gz)"
+    ]
+  }
+}
