@@ -25,7 +25,7 @@ const EMPTY_FORM = {
 };
 
 /**
- * Dialog form for creating a user; the server generates the 6-character username.
+ * Dialog form for creating a user.
  * @param {object} props
  * @param {boolean} props.open
  * @param {string} props.actorId - the acting admin
@@ -110,7 +110,7 @@ function AddUserDialog({ open, actorId, managers, onClose, onCreated }) {
               children: managers.length === 0
                 ? [<MenuItem key="none" value="" disabled>No managers available</MenuItem>]
                 : managers.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.username})`}</MenuItem>
+                  <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.email})`}</MenuItem>
                 )),
             })}
             {field('job_title', 'Job title')}
@@ -133,7 +133,7 @@ AddUserDialog.propTypes = {
     id: PropTypes.string.isRequired,
     first_name: PropTypes.string,
     last_name: PropTypes.string,
-    username: PropTypes.string,
+    email: PropTypes.string,
   })).isRequired,
   onClose: PropTypes.func.isRequired,
   onCreated: PropTypes.func.isRequired,

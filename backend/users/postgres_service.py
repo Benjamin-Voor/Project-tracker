@@ -6,8 +6,6 @@ writes its audit_log row in the same transaction.
 """
 
 import json
-import secrets
-import string
 from typing import Any, Optional
 
 from psycopg import Connection, connect
@@ -18,14 +16,13 @@ from psycopg.types.json import Jsonb
 PG_CONN: Optional[Connection] = None
 
 USER_COLUMNS = (
-    "id, username, first_name, last_name, email, role, job_title, salary, "
+    "id, first_name, last_name, email, role, job_title, salary, "
     "manager_id, is_archived, created_at"
 )
-USERNAME_ALPHABET = string.ascii_lowercase + string.digits
 
 
 class DuplicateUserError(Exception):
-    """Raised when a username or email already exists."""
+    """Raised when the email already exists."""
 
 
 class InvalidManagerError(Exception):
@@ -120,7 +117,7 @@ def get_user(config: str, user_id: str) -> Optional[dict[str, Any]]:
 
 def create_user(config: str, actor: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
     """
-    Insert a user with a generated 6-character username, plus its audit row.
+    Insert a user plus its audit row.
 
     The password is hashed in Postgres with pgcrypto bcrypt, and the new user
     must change it at first login.
@@ -130,40 +127,35 @@ def create_user(config: str, actor: dict[str, Any], data: dict[str, Any]) -> dic
         InvalidManagerError: manager_id is not an active manager.
     """
     conn = _get_connection(config)
-    for _ in range(5):
-        username = "".join(secrets.choice(USERNAME_ALPHABET) for _ in range(6))
-        try:
-            with conn.transaction(), conn.cursor() as cur:
-                manager_id = data.get("manager_id")
-                if manager_id:
-                    _require_manager(cur, manager_id)
-                cur.execute(
-                    f"""
-                    INSERT INTO users (
-                        username, first_name, last_name, email, password_hash,
-                        role, job_title, salary, manager_id, must_change_password
-                    )
-                    VALUES (%s, %s, %s, %s, crypt(%s, gen_salt('bf')), %s, %s, %s, %s, true)
-                    RETURNING {USER_COLUMNS}
-                    """,
-                    (
-                        username, data["first_name"], data["last_name"], data["email"],
-                        data["password"], data["role"], data.get("job_title"),
-                        data.get("salary"), manager_id,
-                    ),
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            manager_id = data.get("manager_id")
+            if manager_id:
+                _require_manager(cur, manager_id)
+            cur.execute(
+                f"""
+                INSERT INTO users (
+                    first_name, last_name, email, password_hash,
+                    role, job_title, salary, manager_id, must_change_password
                 )
-                user = cur.fetchone()
-                _audit(cur, actor, "create", user["id"], {
-                    "username": user["username"],
-                    "email": user["email"],
-                    "role": user["role"],
-                    "manager_id": user["manager_id"],
-                })
-                return user
-        except UniqueViolation as exc:
-            if "email" in str(exc.diag.constraint_name or ""):
-                raise DuplicateUserError("A user with that email already exists") from exc
-    raise DuplicateUserError("Could not generate a unique username; try again")
+                VALUES (%s, %s, %s, crypt(%s, gen_salt('bf')), %s, %s, %s, %s, true)
+                RETURNING {USER_COLUMNS}
+                """,
+                (
+                    data["first_name"], data["last_name"], data["email"],
+                    data["password"], data["role"], data.get("job_title"),
+                    data.get("salary"), manager_id,
+                ),
+            )
+            user = cur.fetchone()
+            _audit(cur, actor, "create", user["id"], {
+                "email": user["email"],
+                "role": user["role"],
+                "manager_id": user["manager_id"],
+            })
+            return user
+    except UniqueViolation as exc:
+        raise DuplicateUserError("A user with that email already exists") from exc
 
 
 def update_user(config: str, actor: dict[str, Any], user_id: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -241,7 +233,7 @@ def list_audit(config: str, entity_type: Optional[str], limit: int) -> list[dict
     """Return the newest audit_log rows with the actor's name, optionally for one entity type."""
     query = """
         SELECT a.id, a.created_at, a.action, a.entity_type, a.entity_id, a.changes, a.source,
-               a.actor_role, u.username AS actor_username,
+               a.actor_role, u.email AS actor_email,
                u.first_name || ' ' || u.last_name AS actor_name
         FROM audit_log a
         LEFT JOIN users u ON u.id = a.actor_id

@@ -39,7 +39,6 @@ function UserTable({
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
-            <TableCell>Username</TableCell>
             <TableCell>Email</TableCell>
             <TableCell>Role</TableCell>
             <TableCell>Job title</TableCell>
@@ -59,7 +58,6 @@ function UserTable({
                 {`${user.first_name} ${user.last_name}`}
                 {user.is_archived && <Chip size="small" label="archived" sx={{ ml: 1 }} />}
               </TableCell>
-              <TableCell>{user.username}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell><Chip size="small" label={user.role} /></TableCell>
               <TableCell>{user.job_title || '-'}</TableCell>
@@ -86,7 +84,6 @@ function UserTable({
 UserTable.propTypes = {
   users: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
-    username: PropTypes.string,
     first_name: PropTypes.string,
     last_name: PropTypes.string,
     email: PropTypes.string,

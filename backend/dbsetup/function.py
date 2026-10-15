@@ -33,17 +33,17 @@ PG_CONFIG = (
 SCHEMA_SQL = Path(__file__).with_name("schema.sql").read_text()
 DEMO_SQL = Path(__file__).with_name("seed-demo.sql").read_text()
 
-# Same row as db/seed-admin.sql; does nothing if admin1 or the email exists.
+# Same row as db/seed-admin.sql; does nothing if the email exists.
 SEED_ADMIN_SQL = """
-INSERT INTO users (username, first_name, last_name, email, password_hash, role, must_change_password)
-VALUES ('admin1', 'System', 'Admin', 'admin@example.com',
+INSERT INTO users (first_name, last_name, email, password_hash, role, must_change_password)
+VALUES ('System', 'Admin', 'admin@example.com',
         crypt(%s, gen_salt('bf')), 'admin', true)
 ON CONFLICT DO NOTHING
 """
 
 
 def handler(event: Optional[dict[str, Any]] = None, context: Any = None) -> dict[str, Any]:
-    """Apply the schema, then optionally seed admin1 and the demo data."""
+    """Apply the schema, then optionally seed the first admin and the demo data."""
     event = event or {}
     if "requestContext" in event:
         return {"statusCode": 404, "body": '{"error": "Not found"}'}
@@ -59,12 +59,12 @@ def handler(event: Optional[dict[str, Any]] = None, context: Any = None) -> dict
             conn.execute(DEMO_SQL)
             logger.info("Demo data loaded")
         admins = conn.execute(
-            "SELECT username FROM users WHERE role = 'admin' ORDER BY username"
+            "SELECT email FROM users WHERE role = 'admin' ORDER BY email"
         ).fetchall()
 
     return {
         "schema": "applied",
-        "admin1_created": seeded,
+        "admin_created": seeded,
         "demo": event.get("demo") is True,
         "admins": [a[0] for a in admins],
     }

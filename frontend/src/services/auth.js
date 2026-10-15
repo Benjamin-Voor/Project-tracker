@@ -12,15 +12,15 @@ export async function login(email, password) {
 
 /**
  * Change the password; clears the "must change password" flag.
- * @param {string} username
+ * @param {string} userId
  * @param {string} currentPassword
  * @param {string} newPassword
  * @returns {Promise<object>} the updated session user
  */
-export async function changePassword(username, currentPassword, newPassword) {
+export async function changePassword(userId, currentPassword, newPassword) {
   return (await request('/api/auth/password', {
     method: 'POST',
-    body: { username, current_password: currentPassword, new_password: newPassword },
+    body: { user_id: userId, current_password: currentPassword, new_password: newPassword },
   })).user;
 }
 

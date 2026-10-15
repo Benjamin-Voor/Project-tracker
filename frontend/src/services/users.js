@@ -12,8 +12,7 @@ export async function fetchUsers(actorId, includeArchived = false) {
 }
 
 /**
- * Create a user (admin only). The username is generated, and the new user
- * must change their password at first login.
+ * Create a user (admin only). The new user must change their password at first login.
  * @param {string} actorId
  * @param {object} user
  * @returns {Promise<object>} the created user

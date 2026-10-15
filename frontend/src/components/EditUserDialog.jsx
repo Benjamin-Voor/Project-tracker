@@ -96,7 +96,7 @@ function EditUserDialog({
       select: true,
       required: true,
       children: managers.map((m) => (
-        <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.username})`}</MenuItem>
+        <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.email})`}</MenuItem>
       )),
     },
   };
@@ -108,9 +108,6 @@ function EditUserDialog({
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            {user && (
-              <TextField size="small" label="Username" value={user.username} disabled />
-            )}
             {fields.map((name) => (
               <TextField
                 key={name}
@@ -139,7 +136,6 @@ EditUserDialog.propTypes = {
   open: PropTypes.bool.isRequired,
   user: PropTypes.shape({
     id: PropTypes.string.isRequired,
-    username: PropTypes.string,
     role: PropTypes.string,
     manager_id: PropTypes.string,
   }),
@@ -151,7 +147,7 @@ EditUserDialog.propTypes = {
     id: PropTypes.string.isRequired,
     first_name: PropTypes.string,
     last_name: PropTypes.string,
-    username: PropTypes.string,
+    email: PropTypes.string,
   })),
   onClose: PropTypes.func.isRequired,
   onSaved: PropTypes.func.isRequired,

@@ -46,7 +46,7 @@ function ProjectTable({
             <TableCell>Name</TableCell>
             <TableCell>Manager</TableCell>
             <TableCell>Dates</TableCell>
-            <TableCell align="right">Hours</TableCell>
+            <TableCell align="right">Hours logged / allocated</TableCell>
             <TableCell align="right">Budget</TableCell>
             <TableCell>Status</TableCell>
             <TableCell align="right">Team</TableCell>
@@ -64,7 +64,7 @@ function ProjectTable({
                 </TableCell>
                 <TableCell>{project.manager_name}</TableCell>
                 <TableCell>{`${project.start_date} to ${project.end_date}`}</TableCell>
-                <TableCell align="right">{project.allocated_hours}</TableCell>
+                <TableCell align="right">{`${project.logged_hours} / ${project.allocated_hours}`}</TableCell>
                 <TableCell align="right">
                   {project.budget == null ? '-' : Number(project.budget).toLocaleString()}
                 </TableCell>
@@ -101,6 +101,7 @@ ProjectTable.propTypes = {
     start_date: PropTypes.string,
     end_date: PropTypes.string,
     allocated_hours: PropTypes.number,
+    logged_hours: PropTypes.number,
     budget: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     status: PropTypes.string,
     is_archived: PropTypes.bool,

@@ -36,7 +36,7 @@ source ~/.bashrc
 
 ## 2. Database schema and first admin (dbsetup Lambda)
 
-Aurora is private to the VPC, so the schema can't be applied with local `psql`. [backend/dbsetup/function.py](../../../backend/dbsetup/function.py) applies its copy of the schema and optionally seeds `admin1`. It only accepts direct invocation; web requests get 404.
+Aurora is private to the VPC, so the schema can't be applied with local `psql`. [backend/dbsetup/function.py](../../../backend/dbsetup/function.py) applies its copy of the schema and optionally seeds the first admin (`admin@example.com`). It only accepts direct invocation; web requests get 404.
 
 After changing the schema or demo seed, first refresh the copies:
 
@@ -53,7 +53,7 @@ aws lambda invoke --function-name "coding-workshop-dbsetup-$PARTICIPANT_ID" \
   --payload '{}' out.json && cat out.json; rm -f out.json
 ```
 
-- To seed `admin1` (first deploy only), use `--payload "{\"admin_password\":\"$PW\"}"` with `PW=$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-14)`, and give the user the password — it can't be recovered later. `admin1` must change it at first login. Seeding does nothing if `admin1` already exists.
+- To seed the first admin, `admin@example.com` (first deploy only), use `--payload "{\"admin_password\":\"$PW\"}"` with `PW=$(openssl rand -base64 12 | tr -d '/+=' | cut -c1-14)`, and give the user the password — it can't be recovered later. The admin must change it at first login. Seeding does nothing if that email already exists.
 - To load the demo users and projects ([db/seed-demo.sql](../../../db/seed-demo.sql); password `Demo1234!` for every demo user), use `--payload '{"demo": true}'`. Safe to re-run.
 - Expect `{"schema": "applied", ...}`. A timeout usually means Aurora was paused (min capacity 0); retry after ~20 s.
 

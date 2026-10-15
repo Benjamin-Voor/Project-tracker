@@ -4,6 +4,7 @@ import {
   Alert, Box, Button, Chip, Paper, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import BudgetPanel from '../components/BudgetPanel';
+import MilestoneGantt from '../components/MilestoneGantt';
 import MilestonesPanel from '../components/MilestonesPanel';
 import TimeEntriesPanel from '../components/TimeEntriesPanel';
 import { fetchAllocations, fetchMilestones } from '../services/projects';
@@ -67,12 +68,13 @@ function ProjectDetail({
           </Stack>
         </Box>
         <Typography variant="body2" sx={{ mt: 2 }}>
-          {`${done} of ${milestones.length} milestones completed · ${project.allocated_hours} allocated hours`}
+          {`${done} of ${milestones.length} milestones completed · ${project.logged_hours} of ${project.allocated_hours} allocated hours logged`}
         </Typography>
       </Paper>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
         <Tab value="milestones" label="Milestones" />
+        <Tab value="gantt" label="Gantt" />
         <Tab value="time" label="Time" />
         {canManage && <Tab value="budget" label="Budget" />}
       </Tabs>
@@ -83,6 +85,15 @@ function ProjectDetail({
           allocations={allocations}
           actorId={actorId}
           canManage={canManage}
+          onChange={setMilestones}
+        />
+      )}
+      {tab === 'gantt' && (
+        <MilestoneGantt
+          project={project}
+          milestones={milestones}
+          actorId={actorId}
+          editable={canManage && !project.is_archived}
           onChange={setMilestones}
         />
       )}
@@ -106,6 +117,7 @@ ProjectDetail.propTypes = {
     end_date: PropTypes.string,
     status: PropTypes.string,
     allocated_hours: PropTypes.number,
+    logged_hours: PropTypes.number,
     allocation_count: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     budget: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     is_archived: PropTypes.bool,

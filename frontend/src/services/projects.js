@@ -67,14 +67,14 @@ export async function fetchAllocations(actorId, projectId) {
  * @param {string} actorId
  * @param {string} projectId
  * @param {string} userId
- * @param {number} plannedHours
+ * @param {number} allocatedHours
  * @returns {Promise<object[]>} the updated allocations
  */
-export async function addAllocation(actorId, projectId, userId, plannedHours) {
+export async function addAllocation(actorId, projectId, userId, allocatedHours) {
   return (await request(`/api/projects/${projectId}/allocations`, {
     method: 'POST',
     actorId,
-    body: { user_id: userId, planned_hours: plannedHours },
+    body: { user_id: userId, allocated_hours: allocatedHours },
   })).allocations;
 }
 

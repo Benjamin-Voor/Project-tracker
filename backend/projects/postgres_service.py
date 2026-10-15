@@ -15,19 +15,23 @@ from psycopg.types.json import Jsonb
 PG_CONN: Optional[Connection] = None
 
 PROJECT_SELECT = """
-    SELECT p.id, p.name, p.description, p.start_date, p.end_date, p.allocated_hours,
+    SELECT p.id, p.name, p.description, p.start_date, p.end_date,
            p.budget, p.manager_id, p.status, p.is_archived, p.archived_at,
            p.created_by, p.created_at, p.updated_at,
            m.first_name || ' ' || m.last_name AS manager_name,
            (SELECT count(*) FROM project_allocations pa WHERE pa.project_id = p.id)
-               AS allocation_count
+               AS allocation_count,
+           (SELECT COALESCE(SUM(pa.allocated_hours), 0)::float FROM project_allocations pa
+             WHERE pa.project_id = p.id) AS allocated_hours,
+           (SELECT COALESCE(SUM(te.hours), 0)::float FROM time_entries te
+             WHERE te.project_id = p.id) AS logged_hours
     FROM projects p
     JOIN users m ON m.id = p.manager_id
 """
 
 UPDATABLE_FIELDS = (
     "name", "description", "start_date", "end_date",
-    "allocated_hours", "budget", "status", "manager_id",
+    "budget", "status", "manager_id",
 )
 
 
@@ -157,13 +161,13 @@ def create_project(config: str, actor: dict[str, Any], data: dict[str, Any]) -> 
             cur.execute(
                 """
                 INSERT INTO projects (name, description, start_date, end_date,
-                                      allocated_hours, budget, manager_id, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                      budget, manager_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
                     data["name"], data.get("description"), data["start_date"], data["end_date"],
-                    data["allocated_hours"], data.get("budget"), data["manager_id"], actor["id"],
+                    data.get("budget"), data["manager_id"], actor["id"],
                 ),
             )
         except UniqueViolation as exc:
@@ -192,7 +196,7 @@ def update_project(config: str, actor: dict[str, Any], project_id: str, data: di
         except UniqueViolation as exc:
             raise ConflictError("A project with that name already exists") from exc
         except CheckViolation as exc:
-            raise ValidationFailure({"body": "dates, hours or budget violate project constraints"}) from exc
+            raise ValidationFailure({"body": "dates or budget violate project constraints"}) from exc
         if cur.fetchone() is None:
             raise NotFoundError("Project not found")
         _audit(cur, actor, "update", project_id, fields)
@@ -231,8 +235,8 @@ def list_allocations(config: str, project_id: str) -> list[dict[str, Any]]:
     with _conn(config).cursor() as cur:
         cur.execute(
             """
-            SELECT pa.user_id, pa.planned_hours, pa.allocated_at,
-                   u.username, u.first_name, u.last_name, u.job_title
+            SELECT pa.user_id, pa.allocated_hours, pa.allocated_at,
+                   u.email, u.first_name, u.last_name, u.job_title
             FROM project_allocations pa
             JOIN users u ON u.id = pa.user_id
             WHERE pa.project_id = %s
@@ -243,7 +247,7 @@ def list_allocations(config: str, project_id: str) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
-def add_allocation(config: str, actor: dict[str, Any], project_id: str, user_id: str, planned_hours: float) -> list[dict[str, Any]]:
+def add_allocation(config: str, actor: dict[str, Any], project_id: str, user_id: str, allocated_hours: float) -> list[dict[str, Any]]:
     """Allocate an employee to a project; their manager must be the project manager."""
     conn = _conn(config)
     with conn.transaction(), conn.cursor() as cur:
@@ -259,17 +263,17 @@ def add_allocation(config: str, actor: dict[str, Any], project_id: str, user_id:
         try:
             cur.execute(
                 """
-                INSERT INTO project_allocations (project_id, user_id, planned_hours, allocated_by)
+                INSERT INTO project_allocations (project_id, user_id, allocated_hours, allocated_by)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (project_id, user_id, planned_hours, actor["id"]),
+                (project_id, user_id, allocated_hours, actor["id"]),
             )
         except UniqueViolation as exc:
             raise ConflictError("Employee is already allocated to this project") from exc
         except RaiseException as exc:
             raise ValidationFailure({"user_id": "employee's manager must be the project manager"}) from exc
         _audit(cur, actor, "assign_employee", project_id,
-               {"user_id": user_id, "planned_hours": planned_hours})
+               {"user_id": user_id, "allocated_hours": allocated_hours})
     return list_allocations(config, project_id)
 
 
@@ -312,7 +316,7 @@ def list_milestones(config: str, project_id: str) -> list[dict[str, Any]]:
                    m.completion_criteria, m.start_date, m.end_date, m.actual_start_date,
                    m.actual_end_date, m.status, m.completed_at,
                    COALESCE(json_agg(json_build_object(
-                       'user_id', u.id, 'username', u.username,
+                       'user_id', u.id,
                        'first_name', u.first_name, 'last_name', u.last_name
                    ) ORDER BY u.last_name, u.first_name) FILTER (WHERE u.id IS NOT NULL), '[]')
                        AS assignees
@@ -465,7 +469,7 @@ def list_time_entries(config: str, project_id: str, user_id: Optional[str]) -> l
     """Return a project's time entries, newest first; only one user's when user_id is given."""
     query = """
         SELECT te.id, te.user_id, te.milestone_id, te.work_date, te.hours, te.note, te.created_at,
-               u.username, u.first_name, u.last_name, m.name AS milestone_name
+               u.first_name, u.last_name, m.name AS milestone_name
         FROM time_entries te
         JOIN users u ON u.id = te.user_id
         LEFT JOIN milestones m ON m.id = te.milestone_id
@@ -545,13 +549,13 @@ def get_budget(config: str, project_id: str) -> dict[str, Any]:
 
     Actual cost comes from the project_budget_summary view (logged hours at
     salary / 2080 per hour, plus expenses). Planned salary cost uses the
-    allocations' planned hours at the same hourly rate.
+    allocations' allocated hours at the same hourly rate.
     """
     with _conn(config).cursor() as cur:
         cur.execute(
             """
             SELECT b.budget, b.salary_cost, b.expense_cost, b.actual_cost, b.variance,
-                   (SELECT COALESCE(SUM(pa.planned_hours * COALESCE(u.salary, 0) / 2080.0), 0)
+                   (SELECT COALESCE(SUM(pa.allocated_hours * COALESCE(u.salary, 0) / 2080.0), 0)
                     FROM project_allocations pa JOIN users u ON u.id = pa.user_id
                     WHERE pa.project_id = b.project_id) AS planned_salary_cost,
                    (SELECT COALESCE(SUM(hours), 0) FROM time_entries

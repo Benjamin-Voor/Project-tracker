@@ -49,10 +49,9 @@ The `users` table stores user identity and role metadata.
 
 Key fields:
 
-- `id`: UUID primary key
-- `username`: generated unique username, exactly 6 characters
+- `id`: UUID primary key; the only user identifier (there is no username)
 - `first_name`, `last_name`
-- `email`: unique
+- `email`: unique; used to sign in
 - `password_hash`: hashed password, never stored in plain text
 - `role`: `admin`, `manager`, or `employee`
 - `job_title`
@@ -60,6 +59,8 @@ Key fields:
 - `manager_id`: optional for admin/manager, required for employees
 - `is_archived`, `archived_at`
 - `created_at`, `updated_at`
+
+Project hours are not stored. The API calculates allocated hours (the sum of `project_allocations.allocated_hours`) and logged hours (the sum of `time_entries.hours`).
 
 Business rules:
 
@@ -80,7 +81,6 @@ Key fields:
 - `name`: unique project name
 - `description`
 - `start_date`, `end_date`
-- `allocated_hours`
 - `budget`
 - `manager_id`
 - `status`: `not_started`, `in_progress`, `completed`, `abandoned`
@@ -107,20 +107,20 @@ Key fields:
 - `id`
 - `project_id`
 - `user_id`
-- `planned_hours`
+- `allocated_hours`
 - `allocated_by`
 - `allocated_at`
 
 This table answers:
 
 - which employees are assigned to which projects
-- how many hours are planned for each project assignment
+- how many hours are allocated to each project assignment
 
 Rules:
 
 - one employee cannot be assigned to the same project twice
 - the employee’s manager must match the project manager
-- planned hours must be zero or greater
+- allocated hours must be zero or greater
 
 This is essential because employees can be on many projects, and projects can have many employees.
 
@@ -350,7 +350,6 @@ The SQL schema adds constraints and triggers so the application does not have to
 
 Examples:
 
-- `username` must be length 6
 - `role` must be one of the valid enums
 - project end date cannot be before start date
 - employee must have a manager when role is employee

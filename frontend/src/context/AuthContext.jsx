@@ -67,7 +67,7 @@ export function AuthProvider({ children }) {
   }, [sessionUser, storeUser]);
 
   const changePassword = useCallback(async (currentPassword, newPassword) => {
-    storeUser(await authApi.changePassword(sessionUser.username, currentPassword, newPassword));
+    storeUser(await authApi.changePassword(sessionUser.id, currentPassword, newPassword));
   }, [sessionUser, storeUser]);
 
   const updateSessionUser = useCallback((changes) => {

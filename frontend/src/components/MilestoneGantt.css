@@ -1,0 +1,3 @@
+/* Gantt chart styles from frappe-gantt. The package exports its CSS only through a
+   "style" condition, so import the file by path. */
+@import '../../node_modules/frappe-gantt/dist/frappe-gantt.css';

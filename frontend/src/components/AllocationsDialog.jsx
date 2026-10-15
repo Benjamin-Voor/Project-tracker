@@ -96,8 +96,8 @@ function AllocationsDialog({
                 )}
               >
                 <ListItemText
-                  primary={`${a.first_name} ${a.last_name} (${a.username})`}
-                  secondary={`${Number(a.planned_hours)} planned hours${a.job_title ? ` - ${a.job_title}` : ''}`}
+                  primary={`${a.first_name} ${a.last_name} (${a.email})`}
+                  secondary={`${Number(a.allocated_hours)} allocated hours${a.job_title ? ` - ${a.job_title}` : ''}`}
                 />
               </ListItem>
             ))}
@@ -118,13 +118,13 @@ function AllocationsDialog({
                 {available.length === 0
                   ? <MenuItem value="" disabled>No available employees on this manager&apos;s team</MenuItem>
                   : available.map((e) => (
-                    <MenuItem key={e.id} value={e.id}>{`${e.first_name} ${e.last_name} (${e.username})`}</MenuItem>
+                    <MenuItem key={e.id} value={e.id}>{`${e.first_name} ${e.last_name} (${e.email})`}</MenuItem>
                   ))}
               </TextField>
               <TextField
                 size="small"
                 type="number"
-                label="Planned hours"
+                label="Allocated hours"
                 value={hours}
                 onChange={(e) => setHours(e.target.value)}
                 required
@@ -155,7 +155,7 @@ AllocationsDialog.propTypes = {
     id: PropTypes.string.isRequired,
     first_name: PropTypes.string,
     last_name: PropTypes.string,
-    username: PropTypes.string,
+    email: PropTypes.string,
   })).isRequired,
   onClose: PropTypes.func.isRequired,
   onChanged: PropTypes.func.isRequired,

@@ -83,7 +83,7 @@ function AuditLogTable({ actorId }) {
                 <TableRow key={e.id}>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</TableCell>
                   <TableCell>
-                    {e.actor_name ? `${e.actor_name} (${e.actor_username})` : 'anonymous'}
+                    {e.actor_name ? `${e.actor_name} (${e.actor_email})` : 'anonymous'}
                     {e.actor_role && <Chip size="small" label={e.actor_role} sx={{ ml: 1 }} />}
                   </TableCell>
                   <TableCell>{e.action.replace('_', ' ')}</TableCell>

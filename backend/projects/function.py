@@ -121,13 +121,6 @@ def validate_project(data: dict[str, Any], partial: bool) -> tuple[dict[str, Any
     if "start_date" in clean and "end_date" in clean and clean["end_date"] < clean["start_date"]:
         errors["end_date"] = "must not be before start_date"
 
-    if present("allocated_hours") or not partial:
-        hours = data.get("allocated_hours")
-        if isinstance(hours, bool) or not isinstance(hours, int) or hours < 0:
-            errors["allocated_hours"] = "must be a non-negative integer"
-        else:
-            clean["allocated_hours"] = hours
-
     if present("budget"):
         budget = data.get("budget")
         if budget in (None, ""):
@@ -356,13 +349,13 @@ def _route(event: dict[str, Any]) -> dict[str, Any]:
             errors: dict[str, str] = {}
             if not _is_uuid(body.get("user_id")):
                 errors["user_id"] = "required"
-            hours = body.get("planned_hours")
+            hours = body.get("allocated_hours")
             try:
                 hours = float(hours)
                 if hours < 0:
                     raise ValueError
             except (TypeError, ValueError):
-                errors["planned_hours"] = "must be a non-negative number"
+                errors["allocated_hours"] = "must be a non-negative number"
             if errors:
                 raise HttpError(400, {"error": "Validation failed", "fields": errors})
             return _response(201, {"allocations": db.add_allocation(

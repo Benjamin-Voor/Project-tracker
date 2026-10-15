@@ -18,7 +18,6 @@ const EMPTY_FORM = {
   description: '',
   start_date: '',
   end_date: '',
-  allocated_hours: '',
   budget: '',
   status: 'not_started',
   manager_id: '',
@@ -54,7 +53,6 @@ function ProjectFormDialog({
       description: project.description || '',
       start_date: project.start_date,
       end_date: project.end_date,
-      allocated_hours: String(project.allocated_hours),
       budget: project.budget == null ? '' : String(project.budget),
       status: project.status,
       manager_id: project.manager_id,
@@ -76,7 +74,6 @@ function ProjectFormDialog({
       description: form.description,
       start_date: form.start_date,
       end_date: form.end_date,
-      allocated_hours: form.allocated_hours === '' ? null : Number(form.allocated_hours),
       budget: form.budget === '' ? null : Number(form.budget),
     };
     if (isAdmin) payload.manager_id = form.manager_id;
@@ -120,7 +117,6 @@ function ProjectFormDialog({
             {field('description', 'Description', { multiline: true, minRows: 2 })}
             {field('start_date', 'Start date', { type: 'date', required: true, slotProps: { inputLabel: { shrink: true } } })}
             {field('end_date', 'End date', { type: 'date', required: true, slotProps: { inputLabel: { shrink: true } } })}
-            {field('allocated_hours', 'Allocated hours', { type: 'number', required: true, slotProps: { htmlInput: { min: 0, step: 1 } } })}
             {field('budget', 'Budget', { type: 'number', slotProps: { htmlInput: { min: 0, step: '0.01' } } })}
             {project && field('status', 'Status', {
               select: true,
@@ -132,7 +128,7 @@ function ProjectFormDialog({
               children: managers.length === 0
                 ? [<MenuItem key="none" value="" disabled>No managers available</MenuItem>]
                 : managers.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.username})`}</MenuItem>
+                  <MenuItem key={m.id} value={m.id}>{`${m.first_name} ${m.last_name} (${m.email})`}</MenuItem>
                 )),
             })}
           </Stack>
@@ -154,7 +150,6 @@ ProjectFormDialog.propTypes = {
     description: PropTypes.string,
     start_date: PropTypes.string,
     end_date: PropTypes.string,
-    allocated_hours: PropTypes.number,
     budget: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     status: PropTypes.string,
     manager_id: PropTypes.string,
@@ -167,7 +162,7 @@ ProjectFormDialog.propTypes = {
     id: PropTypes.string.isRequired,
     first_name: PropTypes.string,
     last_name: PropTypes.string,
-    username: PropTypes.string,
+    email: PropTypes.string,
   })).isRequired,
   onClose: PropTypes.func.isRequired,
   onSaved: PropTypes.func.isRequired,

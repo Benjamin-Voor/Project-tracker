@@ -34,7 +34,6 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(6) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL,
@@ -49,11 +48,12 @@ CREATE TABLE IF NOT EXISTS users (
     archived_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT users_username_length_chk CHECK (char_length(username) = 6),
     CONSTRAINT users_email_unique UNIQUE (email),
-    CONSTRAINT users_username_unique UNIQUE (username),
     CONSTRAINT users_employee_manager_chk CHECK (role <> 'employee' OR manager_id IS NOT NULL)
 );
+
+-- Usernames were dropped once sign-in moved to email; users are identified by id.
+ALTER TABLE users DROP COLUMN IF EXISTS username;
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS manager_id UUID,
@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS projects (
     description TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    allocated_hours INTEGER NOT NULL,
     budget NUMERIC(14,2),
     manager_id UUID NOT NULL,
     status project_status NOT NULL DEFAULT 'not_started',
@@ -80,12 +79,14 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT projects_name_unique UNIQUE (name),
     CONSTRAINT projects_date_range_chk CHECK (end_date >= start_date),
-    CONSTRAINT projects_budget_chk CHECK (budget IS NULL OR budget >= 0),
-    CONSTRAINT projects_allocated_hours_chk CHECK (allocated_hours >= 0)
+    CONSTRAINT projects_budget_chk CHECK (budget IS NULL OR budget >= 0)
 );
 
+-- Project hours are calculated: allocated = sum of project_allocations.allocated_hours,
+-- logged = sum of time_entries.hours. The old hand-entered column is dropped.
+ALTER TABLE projects DROP COLUMN IF EXISTS allocated_hours;
+
 ALTER TABLE projects
-    ADD COLUMN IF NOT EXISTS allocated_hours INTEGER,
     ADD COLUMN IF NOT EXISTS budget NUMERIC(14,2),
     ADD COLUMN IF NOT EXISTS manager_id UUID,
     ADD COLUMN IF NOT EXISTS status project_status,
@@ -99,17 +100,34 @@ CREATE TABLE IF NOT EXISTS project_allocations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL,
     user_id UUID NOT NULL,
-    planned_hours NUMERIC(10,2) NOT NULL,
+    allocated_hours NUMERIC(10,2) NOT NULL,
     allocated_by UUID,
     allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT project_allocations_pair_unique UNIQUE (project_id, user_id),
-    CONSTRAINT project_allocations_planned_hours_chk CHECK (planned_hours >= 0)
+    CONSTRAINT project_allocations_allocated_hours_chk CHECK (allocated_hours >= 0)
 );
+
+-- Renamed from planned_hours (2026-10-14) to match the table name.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'project_allocations' AND column_name = 'planned_hours') THEN
+        ALTER TABLE project_allocations RENAME COLUMN planned_hours TO allocated_hours;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_allocations_planned_hours_chk') THEN
+        ALTER TABLE project_allocations
+            RENAME CONSTRAINT project_allocations_planned_hours_chk TO project_allocations_allocated_hours_chk;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_allocations_planned_hours_not_null') THEN
+        ALTER TABLE project_allocations
+            RENAME CONSTRAINT project_allocations_planned_hours_not_null TO project_allocations_allocated_hours_not_null;
+    END IF;
+END $$;
 
 ALTER TABLE project_allocations
     ADD COLUMN IF NOT EXISTS project_id UUID,
     ADD COLUMN IF NOT EXISTS user_id UUID,
-    ADD COLUMN IF NOT EXISTS planned_hours NUMERIC(10,2),
+    ADD COLUMN IF NOT EXISTS allocated_hours NUMERIC(10,2),
     ADD COLUMN IF NOT EXISTS allocated_by UUID,
     ADD COLUMN IF NOT EXISTS allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 

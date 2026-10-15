@@ -3,7 +3,7 @@ Users service backed by PostgreSQL.
 
 Routes (relative to the service path; every request needs `actor_id`):
     GET   /                  list users visible to the actor
-    POST  /                  create a user (admin; username is generated)
+    POST  /                  create a user (admin)
     PATCH /{id}              edit a user (self: name/email; manager: own team; admin: anyone)
     POST  /{id}/archive      archive a user (manager: own team; admin: anyone else)
     POST  /{id}/restore      restore a user (admin)

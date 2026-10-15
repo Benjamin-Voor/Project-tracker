@@ -134,7 +134,7 @@ function BudgetPanel({ project, actorId, onEditBudget }) {
               <Figure
                 label="Planned salary cost"
                 value={money(budget.planned_salary_cost)}
-                hint="From team planned hours"
+                hint="From team allocated hours"
               />
             </Box>
           </Box>

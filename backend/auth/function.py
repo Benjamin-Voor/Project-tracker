@@ -3,7 +3,7 @@ Auth service: simple email + password login (no tokens).
 
 Routes (relative to the service path):
     POST /login     {email, password}
-    POST /password  {username, current_password, new_password}
+    POST /password  {user_id, current_password, new_password}
     POST /logout    {actor_id}
 """
 
@@ -106,13 +106,15 @@ def _route(event: dict[str, Any]) -> dict[str, Any]:
         return _response(200, {"user": user})
 
     if route == "password":
-        username = _text(body, "username", 6)
+        user_id = _text(body, "user_id", 36)
+        if not UUID_RE.match(user_id):
+            raise HttpError(400, {"error": "Validation failed", "fields": {"user_id": "must be a UUID"}})
         current = _text(body, "current_password", MAX_PASSWORD_LENGTH)
         new = _text(body, "new_password", 1000)
         problem = validate_new_password(new, current)
         if problem:
             raise HttpError(400, {"error": "Validation failed", "fields": {"new_password": problem}})
-        user = db.change_password(PG_CONFIG, username, current, new)
+        user = db.change_password(PG_CONFIG, user_id, current, new)
         if user is None:
             raise HttpError(401, {"error": "Current password is incorrect"})
         return _response(200, {"user": user})
