@@ -1,113 +1,131 @@
-# Coding Workshop
+# Project Tracker
 
-The goal of this coding workshop is to enable and assess the hands-on skills
-of participants through development of a practical technical solution that
-solves a theoretical business problem.
+A project-tracking web app built during the Citi coding workshop. Admins,
+managers and employees use it to plan projects, assign people, track
+milestones on a Gantt chart, log time, and watch budgets and delivery risk.
 
-## Getting Started
+This repository is a fork of
+[citi/coding-workshop-participant](https://github.com/citi/coding-workshop-participant),
+the workshop's starter repo. The scripts, Terraform and workshop guides come
+from that repo; the application (frontend, backend services and database) was
+built here.
 
-Navigate to [Coding Workshop - Main Guide](./docs/README.md) to get started.
+## Features
 
-## Coding Workshop Example
+* **Sign-in and roles:** email and password login, a forced password change
+  on first login, and role-based access for admins, managers and employees.
+* **Projects:** create, edit, archive and restore projects; allocate employees
+  with planned hours; total hours are calculated from logged time.
+* **Milestones:** create milestones, assign employees, set dependencies
+  between milestones, and drag planned dates on a Gantt chart.
+* **Time and budget:** employees log hours; managers record expenses and see
+  spend (logged hours × salary rate + expenses) against budget.
+* **Dashboard:** late and at-risk projects, and employee workload with
+  over-allocation flags.
+* **Users:** admins create and manage users and read the audit log; managers
+  manage their own team; everyone can edit their own profile.
+* **Search and filters** on projects, users and milestones.
+* **Mobile layout:** tables, dialogs and the app bar adapt to phone screens.
+* **Audit log:** changes, logins and logouts are recorded in an append-only
+  log. Nothing is hard-deleted; records are archived instead.
 
-Coding workshop organizer(s) will provide instructions to follow by email. Here
-below is a real example of requirements and expectations for participant(s):
+## Roles
 
-### Requirements: Business Problem
+| Role | Can do |
+| --- | --- |
+| Admin | Everything a manager can, plus create users and projects, restore archived projects, view archived projects and the audit log |
+| Manager | Everything an employee can, plus edit their projects and budgets, create milestones, assign employees, and manage their team |
+| Employee | View assigned projects, log time, edit their own name and email |
 
-Our company ACME Inc. is going through a massive organizational transformation
-to become a more data-driven organization. Information about teams structure
-and performance is currently scattered across multiple systems, making it
-difficult to get a comprehensive view of team dynamics and achievements.
+## Tech stack
 
-We are struggling to answer simple questions like:
+* **Frontend:** React, Material UI, React Responsive, frappe-gantt
+  ([frontend/](./frontend/))
+* **Backend:** Python AWS Lambda services for auth, users and projects
+  ([backend/](./backend/))
+* **Database:** PostgreSQL locally, Aurora PostgreSQL on AWS
+  ([db/schema.sql](./db/schema.sql))
+* **Infrastructure:** Terraform ([infra/](./infra/)) and shell scripts
+  ([bin/](./bin/)), deployed to LocalStack or AWS (S3, CloudFront, Lambda,
+  Aurora)
 
-* Who are the members of each team?
-* Where are the teams located?
-* What are the key achievements of each team on a monthly basis?
-* How many teams have team leader not co-located with team members?
-* How many teams have team leader as a non-direct staff?
-* How many teams have non-direct staff to employees ratio above 20%?
-* How many teams are reporting to an organization leader?
+## Getting started
 
-### Requirements: Technical Solution
+On a fresh Ubuntu machine:
 
-As part of this transformation, we are looking to build a centralized team
-management tool that will allow us to track team members, team locations,
-monthly team achievements, as well as individual-level and team-level metadata.
-Initial focus is to provide a self-service capability without any integrations
-with other tools such as Employee Directory, Project Tracking, or Performance
-Management.
+```sh
+./bin/setup-environment.sh   # install tools; starts PostgreSQL on localhost:5432
+```
 
-The technical solution involves developing a stand-alone web application using
-modern technologies. The application will have the following features:
+Create the database and seed data:
 
-* User authentication and authorization
-* Role-based access control
-* CRUD operations for individuals, teams, achievements and metadata
-* Search and filter functionality
-* Responsive design for mobile and desktop usage
+```sh
+export PGPASSWORD=postgres123
+psql -h localhost -U postgres -d postgres -f db/schema.sql
 
-### Requirements: Technology Stack
+# First admin (admin@example.com) with a one-time password
+PW=$(openssl rand -base64 12); echo "temporary password: $PW"
+psql -h localhost -U postgres -d postgres -v password="$PW" -f db/seed-admin.sql
 
-The following technologies are required to build the application:
+# Optional demo data
+psql -h localhost -U postgres -d postgres -f db/seed-demo.sql
+```
 
-* Frontend: HTML, CSS, React.js with React Responsive and Material UI Components
-* Backend: Python
-* Database: PostgreSQL
+Start the app locally:
 
-The following technologies are good to know, as they are used to manage and
-deploy code:
+```sh
+./bin/start-dev.sh
+```
 
-* Version Control: Git, GitHub
-* Infrastructure: Terraform
-* Deployment Mode: Shell Scripts
-* Deployment Target: AWS Serverless (e.g. S3, CloudFront, Lambda, RDS)
+Restart `start-dev.sh` after deploying backend changes locally. The local
+API proxy only reads the Lambda URLs at startup, so API calls fail until it
+restarts.
 
-### Expectations: Value-Based Outcomes
+The demo data has superhero-themed users and projects covering every project
+status, plus late and at-risk examples. Passwords for the seeded accounts are
+in the seed files.
 
-By the end of the workshop, participants will have developed a functional
-web application that meets the requirements outlined above. The application
-will be deployed to a cloud environment and accessible via a web browser.
-Participants will also gain hands-on experience with modern web development
-technologies and best practices.
+## Deploying
 
-## Contributing
+```sh
+./bin/deploy-backend.sh aws    # or: local
+./bin/deploy-frontend.sh aws   # or: local
+```
 
-See the [CONTRIBUTING](./CONTRIBUTING.md) resource for more details.
+On AWS the database sits inside a private VPC, so the `dbsetup` Lambda
+applies the schema and seeds data. See [bin/README.md](./bin/README.md) for
+details.
+
+## Repository layout
+
+* [frontend/](./frontend/): React app
+* [backend/](./backend/): Lambda services (`auth`, `users`, `projects`,
+  `dbsetup`)
+* [db/](./db/): schema and seed scripts
+* [infra/](./infra/): Terraform
+* [bin/](./bin/): setup, local dev and deployment scripts
+* [docs/](./docs/): workshop guides from the original repo
+
+## Workshop background
+
+The workshop asked participants to build a stand-alone web app with
+authentication, role-based access, CRUD operations, search and filtering, and a
+responsive layout, using React, Material UI, Python and PostgreSQL, deployed to
+AWS serverless. The original brief and role guides are in
+[docs/README.md](./docs/README.md) and
+[Workshop_Guidance.md](./Workshop_Guidance.md).
 
 ## License
 
-This library is licensed under the MIT-0 License.
-See the [LICENSE](./LICENSE) resource for more details.
+Licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
 
-## Roadmap
+## Credits
 
-See the
-[open issues](https://github.com/citi/coding-workshop-participant/issues)
-for a list of proposed roadmap features (and known issues).
+Built by Benjamin Voor ([@Benjamin-Voor](https://github.com/Benjamin-Voor)).
 
-## Security
-
-See the
-[Security Issue Notifications](./CONTRIBUTING.md#security-issue-notifications)
-resource for more details.
-
-## Authors
-
-The following people have contributed to this workshop:
-
-* Colin Heilman - [@heilmancs](https://github.com/heilmancs)
-* Eugene Istrati - [@eistrati](https://github.com/eistrati)
-* Isaiah Cornelius Smith - [@corneliusmith](https://github.com/corneliusmith)
-* Juan Arevalo - [@jparevalo27](https://github.com/jparevalo27)
-* Michael Annucci - [@michael-annucci](https://github.com/michael-annucci)
-
-## Feedback
-
-We'd love to hear your feedback! Please:
-
-* ⭐ Star the repository if you find it helpful
-* 🐛 Report issues on GitHub
-* 💡 Suggest improvements
-* 📝 Share your experience
+The workshop and starter repository were created by Colin Heilman
+([@heilmancs](https://github.com/heilmancs)), Eugene Istrati
+([@eistrati](https://github.com/eistrati)), Isaiah Cornelius Smith
+([@corneliusmith](https://github.com/corneliusmith)), Juan Arevalo
+([@jparevalo27](https://github.com/jparevalo27)) and Michael Annucci
+([@michael-annucci](https://github.com/michael-annucci)).
