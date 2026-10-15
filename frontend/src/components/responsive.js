@@ -2,10 +2,10 @@
  * Shared responsive helpers so every table and dialog follows the same pattern:
  * tables scroll horizontally inside their TableContainer and hide less important
  * columns on narrow screens; dialogs go full screen on phones.
- * Uses MUI breakpoints (xs < 600px <= sm < 900px <= md).
+ * Uses MUI breakpoints (xs < 600px <= sm < 900px <= md) for layout and
+ * react-responsive for the phone check in components.
  */
-import { useMediaQuery } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useMediaQuery } from 'react-responsive';
 
 /** sx for a table cell hidden on phones (below sm). Put it on the header and body cell. */
 export const hideOnXs = { display: { xs: 'none', sm: 'table-cell' } };
@@ -22,6 +22,6 @@ export const scrollX = { overflowX: 'auto', maxWidth: '100%' };
  * @returns {boolean}
  */
 export function useIsPhone() {
-  const theme = useTheme();
-  return useMediaQuery(theme.breakpoints.down('sm'));
+  // 599px matches MUI's sm breakpoint (600px), so it agrees with the sx breakpoints above.
+  return useMediaQuery({ maxWidth: 599 });
 }

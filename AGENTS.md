@@ -61,6 +61,7 @@ These override anything else in this repo, including agent suggestions.
 - Browser: for UI checks the agent opens its own tab (`forceNew`); the owner keeps the human tab and the agent does not drive it.
 - Milestone dates (2026-10-14): a milestone's planned dates must lie within its project's dates (planned start on or after the project start, planned end on or before the project end). Actual dates are not checked; work may really finish after the project end. Editing a project's dates so that active milestones no longer fit is rejected, naming the milestones; the manager moves them first.
 - Salaries (2026-10-14): every user needs a salary, admins included. [db/seed-demo.sql](db/seed-demo.sql) gives the superhero users salaries and fills any user still without one (by role: admin 120,000, manager 130,000, employee 80,000); salaries already set are kept. On AWS this runs with `dbsetup` `{"demo": true}`. Salary stays optional in the Add user form and schema (owner, 2026-10-14): only the seed fills it.
+- React Responsive (2026-10-14): the brief names both MUI and `react-responsive`, so both are used. `useIsPhone` in [responsive.js](frontend/src/components/responsive.js) uses `react-responsive` (`maxWidth: 599`, matching MUI's `sm` breakpoint); table columns still use MUI `sx` breakpoints.
 - Budget column (2026-10-14): employees still see the Budget column in the project list (no Budget tab). The owner is fine either way, so it was left as is.
 
 ## Open questions
@@ -73,7 +74,7 @@ These override anything else in this repo, including agent suggestions.
   - Over-allocated: an employee's `allocated_hours` summed over active projects exceeds 8 h × weekdays in those projects' combined date ranges; flags even single-project employees.
   - Dashboard tab is hidden from employees.
   - Removing a milestone dependency hard-deletes the row (no archive column; audit row keeps history), like allocations. Cycles are blocked in Python, not in the schema. Dependencies don't block status changes or enforce date order.
-  - Mobile uses MUI breakpoints/`useMediaQuery` instead of the `react-responsive` package named in the stack; time-entry notes are hidden on phones.
+  - Time-entry notes are hidden on phones.
   - Filters are client-side, not saved across reloads, and managers' "My team" gets search only.
 
 ## Current state
