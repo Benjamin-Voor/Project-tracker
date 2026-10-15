@@ -10,6 +10,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import { createMilestone, updateMilestone } from '../services/projects';
 
 const FIELDS = ['name', 'goal', 'deliverables', 'completion_criteria', 'start_date', 'end_date'];
@@ -27,6 +28,7 @@ const FIELDS = ['name', 'goal', 'deliverables', 'completion_criteria', 'start_da
 function MilestoneFormDialog({
   open, project, milestone, actorId, onClose, onSaved,
 }) {
+  const fullScreen = useIsPhone();
   const [form, setForm] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -73,7 +75,7 @@ function MilestoneFormDialog({
   );
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog fullScreen={fullScreen} open={open} onClose={onClose} fullWidth maxWidth="sm">
       <form onSubmit={handleSubmit}>
         <DialogTitle>{milestone ? 'Edit milestone' : 'New milestone'}</DialogTitle>
         <DialogContent>
@@ -83,7 +85,7 @@ function MilestoneFormDialog({
             {field('goal', 'Goal', { multiline: true, minRows: 2 })}
             {field('deliverables', 'Deliverables', { multiline: true, minRows: 2 })}
             {field('completion_criteria', 'Completion criteria', { multiline: true, minRows: 2 })}
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               {field('start_date', 'Start date', {
                 type: 'date', required: true, fullWidth: true, slotProps: { inputLabel: { shrink: true } },
               })}

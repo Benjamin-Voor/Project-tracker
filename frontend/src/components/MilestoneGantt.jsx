@@ -5,10 +5,13 @@ import {
 } from '@mui/material';
 import Gantt from 'frappe-gantt';
 import './MilestoneGantt.css';
+import { scrollX } from './responsive';
 import { updateMilestone } from '../services/projects';
 
 const PROGRESS = { not_started: 0, in_progress: 50, completed: 100 };
 const VIEW_MODES = ['Day', 'Week', 'Month'];
+// Pixels below the last row so its popup is not cut off.
+const POPUP_ROOM = 90;
 
 /**
  * Escape text for the chart's HTML popup.
@@ -30,8 +33,9 @@ function toIsoDate(date) {
 }
 
 /**
- * Microsoft Project style Gantt chart of a project's milestones. Managers and
- * admins can drag or resize a bar to change the planned dates.
+ * Microsoft Project style Gantt chart of a project's milestones, with arrows
+ * from each milestone to the ones that depend on it. Managers and admins can
+ * drag or resize a bar to change the planned dates.
  * @param {object} props
  * @param {object} props.project
  * @param {object[]} props.milestones
@@ -60,20 +64,38 @@ function MilestoneGantt({
         end: m.end_date,
         progress: PROGRESS[m.status] ?? 0,
         custom_class: `ms-${m.status}`,
+        // Arrows from each milestone this one depends on.
+        dependencies: (m.depends_on || []).filter((id) => byId[id]).join(','),
       }));
 
-    const onDateChange = async (task, start, end) => {
+    // frappe-gantt reports date changes while the bar is still moving. Saving
+    // each one re-renders the chart mid-drag, so keep the latest dates per
+    // milestone and save them once the mouse is released.
+    const pending = new Map();
+    const onDateChange = (task, start, end) => {
+      pending.set(task.id, { start_date: toIsoDate(start), end_date: toIsoDate(end) });
+    };
+    const save = async () => {
+      if (pending.size === 0) return;
+      const changes = [...pending];
+      pending.clear();
       setError('');
       try {
-        onChange(await updateMilestone(actorId, project.id, task.id, {
-          start_date: toIsoDate(start),
-          end_date: toIsoDate(end),
-        }));
+        let updated = null;
+        for (const [id, dates] of changes) {
+          updated = await updateMilestone(actorId, project.id, id, dates);
+        }
+        onChange(updated);
       } catch (err) {
-        setError(err.fields?.end_date || err.message);
+        const { start_date: startError, end_date: endError } = err.fields || {};
+        setError([startError && `Start ${startError}`, endError && `End ${endError}`]
+          .filter(Boolean).join('. ') || err.message);
         setReset((n) => n + 1);
       }
     };
+    // Defer so frappe-gantt's own mouseup handler records the final dates first.
+    const onMouseUp = () => setTimeout(save, 0);
+    document.addEventListener('mouseup', onMouseUp);
 
     new Gantt(el, tasks, {
       view_mode: viewMode,
@@ -87,12 +109,24 @@ function MilestoneGantt({
           ? `<br>Actual: ${escapeHtml(m.actual_start_date)} to ${escapeHtml(m.actual_end_date || '…')}`
           : '';
         const people = m.assignees.map((a) => `${a.first_name} ${a.last_name}`).join(', ');
+        const deps = (m.depends_on || []).filter((id) => byId[id])
+          .map((id) => `#${byId[id].sequence_number} ${byId[id].name}`).join(', ');
         setTitle(escapeHtml(task.name));
         setSubtitle(`${escapeHtml(m.start_date)} to ${escapeHtml(m.end_date)} · ${m.status.replace('_', ' ')}`);
-        setDetails(`Assignees: ${escapeHtml(people || 'none')}${actual}`);
+        setDetails(`Assignees: ${escapeHtml(people || 'none')}${actual}`
+          + `${deps ? `<br>Depends on: ${escapeHtml(deps)}` : ''}`);
       },
     });
+    // frappe-gantt's fixed height leaves no room for the horizontal scrollbar
+    // or for the popup under the last row, which then sit behind a vertical
+    // scrollbar. Make room for both.
+    const chart = el.querySelector('.gantt-container');
+    if (chart) {
+      const scrollbar = chart.offsetHeight - chart.clientHeight;
+      chart.style.height = `${chart.scrollHeight + scrollbar + POPUP_ROOM}px`;
+    }
     return () => {
+      document.removeEventListener('mouseup', onMouseUp);
       el.innerHTML = '';
     };
   }, [milestones, editable, viewMode, actorId, project.id, onChange, reset]);
@@ -118,6 +152,7 @@ function MilestoneGantt({
       <Box
         ref={container}
         sx={{
+          ...scrollX,
           // Microsoft Project palette: blue task bars, green once completed.
           '& .bar-wrapper .bar': { fill: '#8fb4e3' },
           '& .bar-wrapper .bar-progress': { fill: '#2b579a' },
@@ -141,6 +176,7 @@ MilestoneGantt.propTypes = {
     actual_end_date: PropTypes.string,
     status: PropTypes.string,
     assignees: PropTypes.arrayOf(PropTypes.object),
+    depends_on: PropTypes.arrayOf(PropTypes.string),
   })).isRequired,
   actorId: PropTypes.string.isRequired,
   editable: PropTypes.bool.isRequired,

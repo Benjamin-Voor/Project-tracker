@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { addExpense, fetchBudget, fetchExpenses } from '../services/projects';
+import { hideOnXs, scrollX } from './responsive';
 
 const money = (value) => (value == null ? '-' : Number(value).toLocaleString(undefined, {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
@@ -194,14 +195,14 @@ function BudgetPanel({ project, actorId, onEditBudget }) {
         </Paper>
       )}
       {expenses.length === 0 ? <Typography>No expenses recorded.</Typography> : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={scrollX}>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Date</TableCell>
                 <TableCell>Description</TableCell>
                 <TableCell align="right">Amount</TableCell>
-                <TableCell>Added by</TableCell>
+                <TableCell sx={hideOnXs}>Added by</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -210,7 +211,7 @@ function BudgetPanel({ project, actorId, onEditBudget }) {
                   <TableCell>{e.incurred_on}</TableCell>
                   <TableCell>{e.description}</TableCell>
                   <TableCell align="right">{Number(e.amount).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</TableCell>
-                  <TableCell>{e.created_by_name || '-'}</TableCell>
+                  <TableCell sx={hideOnXs}>{e.created_by_name || '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

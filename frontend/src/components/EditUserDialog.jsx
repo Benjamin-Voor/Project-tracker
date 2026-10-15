@@ -11,6 +11,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import { updateUser } from '../services/users';
 
 /**
@@ -50,6 +51,7 @@ const LABELS = {
 function EditUserDialog({
   open, user = null, actor, managers = [], onClose, onSaved,
 }) {
+  const fullScreen = useIsPhone();
   const [form, setForm] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -102,7 +104,7 @@ function EditUserDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog fullScreen={fullScreen} open={open} onClose={onClose} fullWidth maxWidth="sm">
       <form onSubmit={handleSubmit}>
         <DialogTitle>{user && actor.id === user.id ? 'My profile' : 'Edit user'}</DialogTitle>
         <DialogContent>

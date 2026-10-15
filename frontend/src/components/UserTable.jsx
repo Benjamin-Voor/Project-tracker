@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { editableFields } from './EditUserDialog';
+import { hideBelowMd, hideOnXs, scrollX } from './responsive';
 
 /**
  * Table of users with loading, error and empty states, and role-aware row actions.
@@ -34,16 +35,16 @@ function UserTable({
   if (users.length === 0) return <Typography>No users found.</Typography>;
 
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} sx={scrollX}>
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
-            <TableCell>Email</TableCell>
+            <TableCell sx={hideOnXs}>Email</TableCell>
             <TableCell>Role</TableCell>
-            <TableCell>Job title</TableCell>
-            <TableCell align="right">Salary</TableCell>
-            <TableCell>Created</TableCell>
+            <TableCell sx={hideBelowMd}>Job title</TableCell>
+            <TableCell align="right" sx={hideBelowMd}>Salary</TableCell>
+            <TableCell sx={hideBelowMd}>Created</TableCell>
             <TableCell />
           </TableRow>
         </TableHead>
@@ -58,13 +59,13 @@ function UserTable({
                 {`${user.first_name} ${user.last_name}`}
                 {user.is_archived && <Chip size="small" label="archived" sx={{ ml: 1 }} />}
               </TableCell>
-              <TableCell>{user.email}</TableCell>
+              <TableCell sx={hideOnXs}>{user.email}</TableCell>
               <TableCell><Chip size="small" label={user.role} /></TableCell>
-              <TableCell>{user.job_title || '-'}</TableCell>
-              <TableCell align="right">
+              <TableCell sx={hideBelowMd}>{user.job_title || '-'}</TableCell>
+              <TableCell align="right" sx={hideBelowMd}>
                 {user.salary == null ? '-' : Number(user.salary).toLocaleString()}
               </TableCell>
-              <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+              <TableCell sx={hideBelowMd}>{new Date(user.created_at).toLocaleDateString()}</TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                 {canEdit && <Button size="small" onClick={() => onEdit(user)}>Edit</Button>}
                 {canArchive && <Button size="small" onClick={() => onArchive(user)}>Archive</Button>}

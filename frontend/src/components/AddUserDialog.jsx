@@ -11,6 +11,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import { createUser } from '../services/users';
 
 const EMPTY_FORM = {
@@ -34,6 +35,7 @@ const EMPTY_FORM = {
  * @param {Function} props.onCreated - called with the created user
  */
 function AddUserDialog({ open, actorId, managers, onClose, onCreated }) {
+  const fullScreen = useIsPhone();
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -84,7 +86,7 @@ function AddUserDialog({ open, actorId, managers, onClose, onCreated }) {
   );
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+    <Dialog fullScreen={fullScreen} open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <form onSubmit={handleSubmit}>
         <DialogTitle>Add user</DialogTitle>
         <DialogContent>

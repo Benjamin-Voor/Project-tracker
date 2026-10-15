@@ -11,11 +11,36 @@ import {
   Typography,
 } from '@mui/material';
 import AllocationsDialog from '../components/AllocationsDialog';
+import FilterBar, { matchesSearch } from '../components/FilterBar';
 import ProjectFormDialog from '../components/ProjectFormDialog';
-import ProjectTable, { canManageProject } from '../components/ProjectTable';
+import ProjectTable, { canManageProject, riskOf } from '../components/ProjectTable';
 import { useAuth } from '../context/AuthContext';
 import { archiveProject, fetchProjects, restoreProject } from '../services/projects';
 import ProjectDetail from './ProjectDetail';
+
+const STATUS_OPTIONS = ['not_started', 'in_progress', 'completed', 'abandoned']
+  .map((s) => ({ value: s, label: s.replace('_', ' ') }));
+const RISK_OPTIONS = [
+  { value: 'late', label: 'Late' },
+  { value: 'at_risk', label: 'At risk' },
+  { value: 'on_track', label: 'On track' },
+  { value: 'closed', label: 'Closed' },
+];
+const EMPTY_FILTERS = { status: '', manager: '', risk: '' };
+
+/**
+ * Client-side project filter over the loaded list.
+ * @param {object[]} projects
+ * @param {string} search - matched against name and description
+ * @param {{status: string, manager: string, risk: string}} filters - '' means all
+ * @returns {object[]}
+ */
+function filterProjects(projects, search, filters) {
+  return projects.filter((p) => matchesSearch(search, [p.name, p.description])
+    && (!filters.status || p.status === filters.status)
+    && (!filters.manager || p.manager_id === filters.manager)
+    && (!filters.risk || riskOf(p) === filters.risk));
+}
 
 /**
  * Projects page: role-aware list with create, edit, archive and team allocation;
@@ -32,6 +57,8 @@ function ProjectsPage() {
   const [teamProject, setTeamProject] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   const actorId = currentUser?.id;
   const isAdmin = currentUser?.role === 'admin';
@@ -82,6 +109,19 @@ function ProjectsPage() {
     : null;
   const openProject = projects.find((p) => p.id === openId) || null;
 
+  const managerOptions = [...new Map(projects
+    .filter((p) => p.manager_id)
+    .map((p) => [p.manager_id, { value: p.manager_id, label: p.manager_name || p.manager_id }])).values()]
+    .sort((a, b) => a.label.localeCompare(b.label));
+  // The risk filter appears once the projects API returns `at_risk`.
+  const hasRisk = projects.some((p) => p.at_risk !== undefined);
+  const filterDefs = [
+    { key: 'status', label: 'Status', value: filters.status, options: STATUS_OPTIONS },
+    { key: 'manager', label: 'Manager', value: filters.manager, options: managerOptions },
+    ...(hasRisk ? [{ key: 'risk', label: 'Risk', value: filters.risk, options: RISK_OPTIONS }] : []),
+  ];
+  const visibleProjects = filterProjects(projects, search, filters);
+
   return (
     <Container sx={{ py: 4 }}>
       {openProject ? (
@@ -95,7 +135,10 @@ function ProjectsPage() {
         />
       ) : (
       <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 3,
+      }}
+      >
         <Typography variant="h4" component="h1">Projects</Typography>
         <Box>
           {isAdmin && (
@@ -108,9 +151,19 @@ function ProjectsPage() {
         </Box>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchLabel="Search name or description"
+        filters={filterDefs}
+        onFilterChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
+        onClear={() => { setSearch(''); setFilters(EMPTY_FILTERS); }}
+        shown={visibleProjects.length}
+        total={projects.length}
+      />
       {loading ? <CircularProgress /> : (
         <ProjectTable
-          projects={projects}
+          projects={visibleProjects}
           currentUser={currentUser}
           onOpen={(p) => setOpenId(p.id)}
           onEdit={openForm}

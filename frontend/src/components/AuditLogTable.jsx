@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { fetchAuditLog } from '../services/users';
+import { hideOnXs, scrollX } from './responsive';
 
 const ENTITY_TYPES = ['', 'user', 'project', 'milestone', 'time_entry', 'expense'];
 
@@ -50,7 +51,7 @@ function AuditLogTable({ actorId }) {
 
   return (
     <>
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         <TextField
           select
           size="small"
@@ -67,14 +68,14 @@ function AuditLogTable({ actorId }) {
       {loading && <CircularProgress />}
       {!loading && entries.length === 0 && <Typography>No audit entries.</Typography>}
       {!loading && entries.length > 0 && (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={scrollX}>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>When</TableCell>
                 <TableCell>Who</TableCell>
                 <TableCell>Action</TableCell>
-                <TableCell>Entity</TableCell>
+                <TableCell sx={hideOnXs}>Entity</TableCell>
                 <TableCell>Details</TableCell>
               </TableRow>
             </TableHead>
@@ -87,8 +88,8 @@ function AuditLogTable({ actorId }) {
                     {e.actor_role && <Chip size="small" label={e.actor_role} sx={{ ml: 1 }} />}
                   </TableCell>
                   <TableCell>{e.action.replace('_', ' ')}</TableCell>
-                  <TableCell>{e.entity_type}</TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, maxWidth: 420, wordBreak: 'break-word' }}>
+                  <TableCell sx={hideOnXs}>{e.entity_type}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, minWidth: 160, maxWidth: 420, wordBreak: 'break-word' }}>
                     {e.changes ? JSON.stringify(e.changes) : ''}
                   </TableCell>
                 </TableRow>

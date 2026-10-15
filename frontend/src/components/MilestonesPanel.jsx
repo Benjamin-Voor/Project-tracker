@@ -17,9 +17,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import FilterBar, { matchesSearch } from './FilterBar';
 import MilestoneFormDialog from './MilestoneFormDialog';
+import { hideOnXs, scrollX } from './responsive';
 import {
-  archiveMilestone, assignMilestone, unassignMilestone, updateMilestone,
+  addMilestoneDependency, archiveMilestone, assignMilestone, removeMilestoneDependency,
+  unassignMilestone, updateMilestone,
 } from '../services/projects';
 
 const STATUSES = [
@@ -31,7 +34,9 @@ const STATUS_COLORS = { not_started: 'default', in_progress: 'primary', complete
 
 /**
  * Milestones of one project. Managers/admins create, edit, change status,
- * assign allocated employees and archive (which detaches the assignees).
+ * assign allocated employees, set which milestones each one depends on, and
+ * archive (which detaches the assignees). Everyone sees the dependencies; an
+ * unfinished one is shown in amber.
  * @param {object} props
  * @param {object} props.project
  * @param {object[]} props.milestones
@@ -47,13 +52,18 @@ function MilestonesPanel({
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
   const editable = canManage && !project.is_archived;
+  const byId = Object.fromEntries(milestones.map((m) => [m.id, m]));
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const shown = milestones.filter((m) => (!statusFilter || m.status === statusFilter)
+    && matchesSearch(search, [m.name, m.goal]));
 
   const run = async (action) => {
     setError('');
     try {
       onChange(await action());
     } catch (err) {
-      setError(err.fields?.user_id || err.message);
+      setError(err.fields?.user_id || err.fields?.depends_on_milestone_id || err.message);
     }
   };
 
@@ -70,34 +80,54 @@ function MilestonesPanel({
         </Box>
       )}
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      {milestones.length > 0 && (
+        <FilterBar
+          search={search}
+          onSearchChange={setSearch}
+          searchLabel="Search milestones"
+          filters={[{
+            key: 'status',
+            label: 'Status',
+            value: statusFilter,
+            options: STATUSES.map(([value, label]) => ({ value, label })),
+          }]}
+          onFilterChange={(_, value) => setStatusFilter(value)}
+          onClear={() => { setSearch(''); setStatusFilter(''); }}
+          shown={shown.length}
+          total={milestones.length}
+        />
+      )}
       {milestones.length === 0 ? <Typography>No milestones yet.</Typography> : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={scrollX}>
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>#</TableCell>
+                <TableCell sx={hideOnXs}>#</TableCell>
                 <TableCell>Milestone</TableCell>
-                <TableCell>Planned</TableCell>
+                <TableCell sx={hideOnXs}>Planned</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Depends on</TableCell>
                 <TableCell>Assignees</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
             <TableBody>
-              {milestones.map((m) => {
+              {shown.map((m) => {
                 const assignedIds = new Set(m.assignees.map((a) => a.user_id));
                 const available = allocations.filter((a) => !assignedIds.has(a.user_id));
+                const dependsOn = m.depends_on || [];
+                const dependencyOptions = milestones.filter((o) => o.id !== m.id && !dependsOn.includes(o.id));
                 return (
                   <TableRow key={m.id} sx={{ verticalAlign: 'top' }}>
-                    <TableCell>{m.sequence_number}</TableCell>
+                    <TableCell sx={hideOnXs}>{m.sequence_number}</TableCell>
                     <TableCell sx={{ maxWidth: 280 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>{m.name}</Typography>
                       {m.goal && <Typography variant="caption" color="text.secondary">{m.goal}</Typography>}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    <TableCell sx={{ ...hideOnXs, whiteSpace: 'nowrap' }}>
                       {`${m.start_date} to ${m.end_date}`}
                       {m.actual_start_date && (
-                        <Typography variant="caption" display="block" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {`Actual: ${m.actual_start_date}${m.actual_end_date ? ` to ${m.actual_end_date}` : ''}`}
                         </Typography>
                       )}
@@ -115,6 +145,43 @@ function MilestonesPanel({
                         </TextField>
                       ) : (
                         <Chip size="small" color={STATUS_COLORS[m.status]} label={m.status.replace('_', ' ')} />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mb: editable ? 1 : 0 }}>
+                        {dependsOn.length === 0 && <Typography variant="caption">None</Typography>}
+                        {dependsOn.map((id) => {
+                          const dep = byId[id];
+                          if (!dep) return null;
+                          const done = dep.status === 'completed';
+                          return (
+                            <Chip
+                              key={id}
+                              size="small"
+                              variant="outlined"
+                              color={done ? 'success' : 'warning'}
+                              label={`#${dep.sequence_number} ${dep.name}`}
+                              title={done ? 'Completed' : `Waiting: ${dep.status.replace('_', ' ')}`}
+                              onDelete={editable
+                                ? () => run(() => removeMilestoneDependency(actorId, project.id, m.id, id))
+                                : undefined}
+                            />
+                          );
+                        })}
+                      </Stack>
+                      {editable && dependencyOptions.length > 0 && (
+                        <TextField
+                          select
+                          size="small"
+                          label="Add"
+                          value=""
+                          onChange={(e) => run(() => addMilestoneDependency(actorId, project.id, m.id, e.target.value))}
+                          sx={{ minWidth: 160 }}
+                        >
+                          {dependencyOptions.map((o) => (
+                            <MenuItem key={o.id} value={o.id}>{`#${o.sequence_number} ${o.name}`}</MenuItem>
+                          ))}
+                        </TextField>
                       )}
                     </TableCell>
                     <TableCell>
@@ -198,6 +265,7 @@ MilestonesPanel.propTypes = {
       first_name: PropTypes.string,
       last_name: PropTypes.string,
     })),
+    depends_on: PropTypes.arrayOf(PropTypes.string),
   })).isRequired,
   allocations: PropTypes.arrayOf(PropTypes.shape({
     user_id: PropTypes.string.isRequired,

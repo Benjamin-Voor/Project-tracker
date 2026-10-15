@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import {
   Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Stack,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import PasswordField from './PasswordField';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
  * @param {Function} props.onClose - called after success or cancel (optional dialogs only)
  */
 function ChangePasswordDialog({ open, required = false, onClose = () => {} }) {
+  const fullScreen = useIsPhone();
   const { changePassword, logout } = useAuth();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -54,7 +56,7 @@ function ChangePasswordDialog({ open, required = false, onClose = () => {} }) {
   };
 
   return (
-    <Dialog open={open} onClose={required ? undefined : handleCancel} fullWidth maxWidth="xs">
+    <Dialog fullScreen={fullScreen} open={open} onClose={required ? undefined : handleCancel} fullWidth maxWidth="xs">
       <form onSubmit={handleSubmit}>
         <DialogTitle>Change password</DialogTitle>
         <DialogContent>

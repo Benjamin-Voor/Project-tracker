@@ -24,7 +24,7 @@ function UserPicker() {
           sx: { bgcolor: 'background.paper' },
         },
       }}
-      sx={{ width: 300, minWidth: 180, flexShrink: 1 }}
+      sx={{ width: { xs: '100%', sm: 300 }, minWidth: 180, flexShrink: 1 }}
     >
       {users.length === 0 && (
         <MenuItem value="" disabled>

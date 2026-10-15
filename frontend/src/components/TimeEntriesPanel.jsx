@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { addTimeEntry, fetchTimeEntries } from '../services/projects';
+import { hideBelowMd, hideOnXs, scrollX } from './responsive';
 
 /**
  * Today's date as YYYY-MM-DD in local time.
@@ -127,15 +128,15 @@ function TimeEntriesPanel({
         <Typography variant="subtitle1">{`Total: ${total} h`}</Typography>
       </Box>
       {entries.length === 0 ? <Typography>No time logged yet.</Typography> : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={scrollX}>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Date</TableCell>
                 {canManage && <TableCell>Who</TableCell>}
                 <TableCell align="right">Hours</TableCell>
-                <TableCell>Milestone</TableCell>
-                <TableCell>Note</TableCell>
+                <TableCell sx={hideOnXs}>Milestone</TableCell>
+                <TableCell sx={hideBelowMd}>Note</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -144,8 +145,8 @@ function TimeEntriesPanel({
                   <TableCell>{e.work_date}</TableCell>
                   {canManage && <TableCell>{`${e.first_name} ${e.last_name}`}</TableCell>}
                   <TableCell align="right">{Number(e.hours)}</TableCell>
-                  <TableCell>{e.milestone_name || '-'}</TableCell>
-                  <TableCell>{e.note || ''}</TableCell>
+                  <TableCell sx={hideOnXs}>{e.milestone_name || '-'}</TableCell>
+                  <TableCell sx={hideBelowMd}>{e.note || ''}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

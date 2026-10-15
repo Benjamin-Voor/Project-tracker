@@ -11,6 +11,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import { createProject, updateProject } from '../services/projects';
 
 const EMPTY_FORM = {
@@ -38,6 +39,7 @@ const STATUSES = ['not_started', 'in_progress', 'completed', 'abandoned'];
 function ProjectFormDialog({
   open, project, currentUser, managers, onClose, onSaved,
 }) {
+  const fullScreen = useIsPhone();
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -107,7 +109,7 @@ function ProjectFormDialog({
   );
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog fullScreen={fullScreen} open={open} onClose={onClose} fullWidth maxWidth="sm">
       <form onSubmit={handleSubmit}>
         <DialogTitle>{project ? 'Edit project' : 'New project'}</DialogTitle>
         <DialogContent>

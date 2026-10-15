@@ -5,6 +5,7 @@ Every mutation writes its audit_log row in the same transaction.
 """
 
 import json
+from datetime import date
 from typing import Any, Optional
 
 from psycopg import Connection, connect
@@ -24,7 +25,16 @@ PROJECT_SELECT = """
            (SELECT COALESCE(SUM(pa.allocated_hours), 0)::float FROM project_allocations pa
              WHERE pa.project_id = p.id) AS allocated_hours,
            (SELECT COALESCE(SUM(te.hours), 0)::float FROM time_entries te
-             WHERE te.project_id = p.id) AS logged_hours
+             WHERE te.project_id = p.id) AS logged_hours,
+           (SELECT count(*) FROM milestones mo
+             WHERE mo.project_id = p.id AND mo.is_archived = false
+               AND mo.status <> 'completed' AND mo.end_date < CURRENT_DATE)
+               AS overdue_milestones,
+           (SELECT count(*) FROM milestones mo
+             WHERE mo.project_id = p.id AND mo.is_archived = false) AS milestone_count,
+           (SELECT count(*) FROM milestones mo
+             WHERE mo.project_id = p.id AND mo.is_archived = false
+               AND mo.status = 'completed') AS completed_milestones
     FROM projects p
     JOIN users m ON m.id = p.manager_id
 """
@@ -102,7 +112,8 @@ def get_project(config: str, project_id: str) -> Optional[dict[str, Any]]:
     """Return one project with manager name and allocation count, or None."""
     with _conn(config).cursor() as cur:
         cur.execute(PROJECT_SELECT + " WHERE p.id = %s", (project_id,))
-        return cur.fetchone()
+        project = cur.fetchone()
+    return add_risk(project) if project else None
 
 
 def is_allocated(config: str, project_id: str, user_id: str) -> bool:
@@ -139,7 +150,7 @@ def list_projects(config: str, actor: dict[str, Any], include_archived: bool) ->
     query += " ORDER BY p.created_at DESC"
     with _conn(config).cursor() as cur:
         cur.execute(query, params)
-        return cur.fetchall()
+        return [add_risk(project) for project in cur.fetchall()]
 
 
 def _require_manager(cur: Any, manager_id: str) -> None:
@@ -150,6 +161,40 @@ def _require_manager(cur: Any, manager_id: str) -> None:
     )
     if cur.fetchone() is None:
         raise ValidationFailure({"manager_id": "must reference an active manager"})
+
+
+def _milestones_outside_project(cur: Any, project_id: str, milestone_id: Optional[str] = None) -> dict[str, str]:
+    """Return field errors when active milestones are planned outside the project's dates.
+
+    Only planned dates are checked; actual dates may run past the project end.
+    Pass milestone_id to check just that milestone.
+    """
+    query = (
+        "SELECT m.name, m.start_date < p.start_date AS early, m.end_date > p.end_date AS late "
+        "FROM milestones m JOIN projects p ON p.id = m.project_id "
+        "WHERE m.project_id = %s AND m.is_archived = false "
+        "AND (m.start_date < p.start_date OR m.end_date > p.end_date)"
+    )
+    params: list[Any] = [project_id]
+    if milestone_id:
+        query += " AND m.id = %s"
+        params.append(milestone_id)
+    cur.execute(query + " ORDER BY m.sequence_number", params)
+    rows = cur.fetchall()
+    errors = {}
+    early = [r["name"] for r in rows if r["early"]]
+    late = [r["name"] for r in rows if r["late"]]
+    if milestone_id:
+        if early:
+            errors["start_date"] = "must not be before the project start date"
+        if late:
+            errors["end_date"] = "must not be after the project end date"
+    else:
+        if early:
+            errors["start_date"] = f"milestones start before this date: {', '.join(early)}"
+        if late:
+            errors["end_date"] = f"milestones end after this date: {', '.join(late)}"
+    return errors
 
 
 def create_project(config: str, actor: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
@@ -199,6 +244,10 @@ def update_project(config: str, actor: dict[str, Any], project_id: str, data: di
             raise ValidationFailure({"body": "dates or budget violate project constraints"}) from exc
         if cur.fetchone() is None:
             raise NotFoundError("Project not found")
+        if "start_date" in fields or "end_date" in fields:
+            errors = _milestones_outside_project(cur, project_id)
+            if errors:
+                raise ValidationFailure(errors)
         _audit(cur, actor, "update", project_id, fields)
     return get_project(config, project_id)
 
@@ -308,7 +357,8 @@ MILESTONE_FIELDS = (
 
 
 def list_milestones(config: str, project_id: str) -> list[dict[str, Any]]:
-    """Return a project's active milestones in sequence order, each with its current assignees."""
+    """Return a project's active milestones in sequence order, with current assignees and the ids
+    of the active milestones each one depends on (`depends_on`)."""
     with _conn(config).cursor() as cur:
         cur.execute(
             """
@@ -319,7 +369,11 @@ def list_milestones(config: str, project_id: str) -> list[dict[str, Any]]:
                        'user_id', u.id,
                        'first_name', u.first_name, 'last_name', u.last_name
                    ) ORDER BY u.last_name, u.first_name) FILTER (WHERE u.id IS NOT NULL), '[]')
-                       AS assignees
+                       AS assignees,
+                   (SELECT COALESCE(json_agg(d.depends_on_milestone_id ORDER BY dm.sequence_number), '[]')
+                    FROM milestone_dependencies d
+                    JOIN milestones dm ON dm.id = d.depends_on_milestone_id AND dm.is_archived = false
+                    WHERE d.milestone_id = m.id) AS depends_on
             FROM milestones m
             LEFT JOIN milestone_assignments ma ON ma.milestone_id = m.id AND ma.detached_at IS NULL
             LEFT JOIN users u ON u.id = ma.user_id
@@ -378,6 +432,9 @@ def create_milestone(config: str, actor: dict[str, Any], project_id: str, data: 
             ),
         )
         milestone_id = cur.fetchone()["id"]
+        errors = _milestones_outside_project(cur, project_id, milestone_id)
+        if errors:
+            raise ValidationFailure(errors)
         _audit(cur, actor, "create", milestone_id, {"project_id": project_id, **data}, "milestone")
     return list_milestones(config, project_id)
 
@@ -400,6 +457,10 @@ def update_milestone(config: str, actor: dict[str, Any], project_id: str, milest
             raise ValidationFailure({"end_date": "must not be before start_date"}) from exc
         if cur.fetchone() is None:
             raise NotFoundError("Milestone not found")
+        if "start_date" in fields or "end_date" in fields:
+            errors = _milestones_outside_project(cur, project_id, milestone_id)
+            if errors:
+                raise ValidationFailure(errors)
         action = "complete" if fields.get("status") == "completed" else "update"
         _audit(cur, actor, action, milestone_id, fields, "milestone")
     return list_milestones(config, project_id)
@@ -462,6 +523,96 @@ def unassign_milestone(config: str, actor: dict[str, Any], project_id: str, mile
             raise NotFoundError("Assignment not found")
         _audit(cur, actor, "assign_employee", milestone_id,
                {"user_id": user_id, "removed": True}, "milestone")
+    return list_milestones(config, project_id)
+
+
+def list_dependencies(config: str, project_id: str) -> list[dict[str, Any]]:
+    """Return the dependency links between a project's active milestones."""
+    with _conn(config).cursor() as cur:
+        cur.execute(
+            """
+            SELECT d.id, d.milestone_id, m.name AS milestone_name,
+                   d.depends_on_milestone_id, dm.name AS depends_on_name
+            FROM milestone_dependencies d
+            JOIN milestones m ON m.id = d.milestone_id AND m.is_archived = false
+            JOIN milestones dm ON dm.id = d.depends_on_milestone_id AND dm.is_archived = false
+            WHERE m.project_id = %s
+            ORDER BY m.sequence_number, dm.sequence_number
+            """,
+            (project_id,),
+        )
+        return cur.fetchall()
+
+
+def _creates_cycle(cur: Any, milestone_id: str, depends_on_id: str) -> bool:
+    """Return True if depends_on_id already (transitively) depends on milestone_id.
+
+    Only links between active milestones count.
+    """
+    cur.execute(
+        """
+        WITH RECURSIVE chain(id) AS (
+            SELECT %s::uuid
+            UNION
+            SELECT d.depends_on_milestone_id
+            FROM milestone_dependencies d
+            JOIN chain c ON d.milestone_id = c.id
+            JOIN milestones dm ON dm.id = d.depends_on_milestone_id AND dm.is_archived = false
+        )
+        SELECT 1 FROM chain WHERE id = %s::uuid
+        """,
+        (depends_on_id, milestone_id),
+    )
+    return cur.fetchone() is not None
+
+
+def add_dependency(config: str, actor: dict[str, Any], project_id: str, milestone_id: str, depends_on_id: str) -> list[dict[str, Any]]:
+    """Record that milestone_id cannot finish before depends_on_id (same project, no cycles)."""
+    field = "depends_on_milestone_id"
+    if milestone_id == depends_on_id:
+        raise ValidationFailure({field: "a milestone cannot depend on itself"})
+    conn = _conn(config)
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            "SELECT project_id FROM milestones WHERE id = %s AND is_archived = false",
+            (depends_on_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValidationFailure({field: "milestone not found"})
+        if str(row["project_id"]) != str(project_id):
+            raise ValidationFailure({field: "must be a milestone of the same project"})
+        if _creates_cycle(cur, milestone_id, depends_on_id):
+            raise ValidationFailure({field: "would create a circular dependency"})
+        try:
+            cur.execute(
+                "INSERT INTO milestone_dependencies (milestone_id, depends_on_milestone_id) "
+                "VALUES (%s, %s) RETURNING id",
+                (milestone_id, depends_on_id),
+            )
+        except UniqueViolation as exc:
+            raise ConflictError("This dependency already exists") from exc
+        except CheckViolation as exc:
+            raise ValidationFailure({field: "a milestone cannot depend on itself"}) from exc
+        except RaiseException as exc:
+            raise ValidationFailure({field: "must be a milestone of the same project"}) from exc
+        _audit(cur, actor, "update", milestone_id, {field: depends_on_id}, "milestone")
+    return list_milestones(config, project_id)
+
+
+def remove_dependency(config: str, actor: dict[str, Any], project_id: str, milestone_id: str, depends_on_id: str) -> list[dict[str, Any]]:
+    """Delete a dependency link (the table has no archive column; the audit row keeps history)."""
+    conn = _conn(config)
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM milestone_dependencies "
+            "WHERE milestone_id = %s AND depends_on_milestone_id = %s RETURNING id",
+            (milestone_id, depends_on_id),
+        )
+        if cur.fetchone() is None:
+            raise NotFoundError("Dependency not found")
+        _audit(cur, actor, "update", milestone_id,
+               {"depends_on_milestone_id": depends_on_id, "removed": True}, "milestone")
     return list_milestones(config, project_id)
 
 
@@ -566,3 +717,111 @@ def get_budget(config: str, project_id: str) -> dict[str, Any]:
             (project_id,),
         )
         return cur.fetchone()
+
+
+# --- Risk and workload (dashboard) -------------------------------------------
+
+INACTIVE_PROJECT_STATUSES = ("completed", "abandoned")
+HOURS_PER_WORKING_DAY = 8
+
+
+RISK_THRESHOLD = 0.75
+
+
+def add_risk(project: dict[str, Any]) -> dict[str, Any]:
+    """
+    Add `is_late`, `at_risk` (bools), `progress` and `risk_reasons` to a project row.
+
+    Only active projects (not archived, not completed or abandoned) are flagged.
+    Late: today is past the end date, so the deadline is already missed.
+    At risk (deadline still ahead): at least 75% of the project's time has passed
+    but fewer than 75% of its active milestones are completed (no milestones
+    counts as 0% done), or any active, not-completed milestone is past its
+    planned end date.
+    """
+    reasons: list[str] = []
+    total = int(project.get("milestone_count") or 0)
+    done = int(project.get("completed_milestones") or 0)
+    progress = done / total if total else 0.0
+    project["progress"] = round(progress, 2)
+    late = at_risk = False
+    if not project["is_archived"] and project["status"] not in INACTIVE_PROJECT_STATUSES:
+        today = date.today()
+        start, end = project["start_date"], project["end_date"]
+        overdue = int(project.get("overdue_milestones") or 0)
+        if end < today:
+            late = True
+            reasons.append(f"Missed end date {end.isoformat()}")
+        else:
+            elapsed = (today - start).days / max((end - start).days, 1)
+            if elapsed >= RISK_THRESHOLD and progress < RISK_THRESHOLD:
+                at_risk = True
+                reasons.append(
+                    f"{min(elapsed, 1):.0%} of time used, {done} of {total} milestones done"
+                )
+            if overdue:
+                at_risk = True
+        if overdue:
+            reasons.append(f"{overdue} overdue milestone{'s' if overdue != 1 else ''}")
+    project["is_late"] = late
+    project["at_risk"] = at_risk
+    project["risk_reasons"] = reasons
+    return project
+
+
+def workload_report(config: str, actor: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Return each visible employee's allocated hours across active projects.
+
+    Admins see every active employee, managers see their own team, employees
+    see only themselves. Active projects are not archived and not completed or
+    abandoned. Capacity is 8 hours per working day (Monday to Friday) across
+    the union of the employee's active project date ranges; an employee is
+    over-allocated when allocated hours exceed that capacity.
+    """
+    where = ["u.is_archived = false", "u.role = 'employee'"]
+    params: list[Any] = []
+    if actor["role"] == "manager":
+        where.append("u.manager_id = %s")
+        params.append(actor["id"])
+    elif actor["role"] == "employee":
+        where.append("u.id = %s")
+        params.append(actor["id"])
+    query = f"""
+        WITH active AS (
+            SELECT pa.user_id, pa.allocated_hours, p.id AS project_id, p.name,
+                   p.start_date, p.end_date
+            FROM project_allocations pa
+            JOIN projects p ON p.id = pa.project_id
+            WHERE p.is_archived = false AND p.status NOT IN ('completed', 'abandoned')
+        ),
+        capacity AS (
+            SELECT a.user_id, count(DISTINCT d.day) AS working_days
+            FROM active a
+            CROSS JOIN LATERAL generate_series(a.start_date, a.end_date, interval '1 day') AS d(day)
+            WHERE extract(isodow FROM d.day) < 6
+            GROUP BY a.user_id
+        )
+        SELECT u.id AS user_id, u.first_name || ' ' || u.last_name AS name, u.email,
+               u.manager_id, m.first_name || ' ' || m.last_name AS manager_name,
+               COALESCE((SELECT SUM(a.allocated_hours) FROM active a WHERE a.user_id = u.id), 0)::float
+                   AS allocated_hours,
+               (COALESCE(c.working_days, 0) * {HOURS_PER_WORKING_DAY})::float AS capacity_hours,
+               COALESCE((SELECT json_agg(json_build_object(
+                            'project_id', a.project_id, 'name', a.name,
+                            'start_date', a.start_date, 'end_date', a.end_date,
+                            'allocated_hours', a.allocated_hours::float) ORDER BY a.start_date)
+                         FROM active a WHERE a.user_id = u.id), '[]'::json) AS projects
+        FROM users u
+        LEFT JOIN users m ON m.id = u.manager_id
+        LEFT JOIN capacity c ON c.user_id = u.id
+        WHERE {" AND ".join(where)}
+        ORDER BY u.last_name, u.first_name
+    """
+    with _conn(config).cursor() as cur:
+        cur.execute(query, params)
+        rows = cur.fetchall()
+    for row in rows:
+        row["project_count"] = len(row["projects"])
+        row["over_allocated"] = row["allocated_hours"] > row["capacity_hours"]
+    return rows

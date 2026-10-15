@@ -50,7 +50,7 @@ function ProjectDetail({
   return (
     <>
       <Button onClick={onBack} sx={{ mb: 2 }}>&larr; All projects</Button>
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
           <Box>
             <Typography variant="h4" component="h1">
@@ -62,7 +62,7 @@ function ProjectDetail({
             </Typography>
             {project.description && <Typography sx={{ mt: 1 }}>{project.description}</Typography>}
           </Box>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Button variant="outlined" onClick={onTeam}>{`Team (${project.allocation_count})`}</Button>
             {canManage && !project.is_archived && <Button variant="outlined" onClick={onEdit}>Edit project</Button>}
           </Stack>
@@ -72,7 +72,7 @@ function ProjectDetail({
         </Typography>
       </Paper>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons={false} sx={{ mb: 2 }}>
         <Tab value="milestones" label="Milestones" />
         <Tab value="gantt" label="Gantt" />
         <Tab value="time" label="Time" />

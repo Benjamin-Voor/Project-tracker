@@ -1,8 +1,11 @@
 -- Demo data for presentations: 2 managers, 6 employees, 3 projects with teams,
 -- milestones, assignments, time entries and expenses. All names are fake.
 -- Also adds the superhero test users (Bruce Wayne admin; Jameson manages Parker, Kent manages
--- Prince) and 4 superhero projects. The superhero users' password is buzzsawben.
--- Users that already exist are left unchanged.
+-- Prince) and 9 superhero projects (one per status: not started, in progress,
+-- completed, abandoned; 3 with dates relative to today: one late, two at risk).
+-- The superhero users' password is buzzsawben.
+-- Users that already exist are left unchanged, except that every user still without a salary
+-- gets one (every user needs a salary for budget costs).
 -- Every demo user's password is Demo1234! (no forced change, to keep the demo moving).
 -- Requires an admin (db/seed-admin.sql) as the projects' creator. Safe to re-run.
 -- Usage: PGPASSWORD=postgres123 psql -h localhost -U postgres -d postgres -f db/seed-demo.sql
@@ -12,9 +15,9 @@ INSERT INTO users (first_name, last_name, email, password_hash, role, job_title,
 VALUES
     ('Maria', 'Lopez', 'maria.lopez@example.com', crypt('Demo1234!', gen_salt('bf')), 'manager', 'Infrastructure Manager', 145000, NULL),
     ('James', 'Chen', 'james.chen@example.com', crypt('Demo1234!', gen_salt('bf')), 'manager', 'Engineering Manager', 150000, NULL),
-    ('Bruce', 'Wayne', 'DefinitelyNotBatMan@example.com', crypt('buzzsawben', gen_salt('bf')), 'admin', NULL, NULL, NULL),
+    ('Bruce', 'Wayne', 'DefinitelyNotBatMan@example.com', crypt('buzzsawben', gen_salt('bf')), 'admin', 'Chairman of Wayne Enterprises', 200000, NULL),
     ('John', 'Jameson', 'John.Jameson@example.com', crypt('buzzsawben', gen_salt('bf')), 'manager', 'Daily Bugle CEO', 123456, NULL),
-    ('Clark', 'Kent', 'DefinitelyNotSuperMan@example.com', crypt('buzzsawben', gen_salt('bf')), 'manager', 'Reporter', NULL, NULL)
+    ('Clark', 'Kent', 'DefinitelyNotSuperMan@example.com', crypt('buzzsawben', gen_salt('bf')), 'manager', 'Reporter', 68000, NULL)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (first_name, last_name, email, password_hash, role, job_title, salary, manager_id)
@@ -29,10 +32,22 @@ FROM (VALUES
     ('Tom', 'Brown', 'tom.brown@example.com', 'QA Analyst', 85000, 'james.chen@example.com'),
     ('Lily', 'Wong', 'lily.wong@example.com', 'Business Analyst', 92000, 'james.chen@example.com'),
     ('Peter', 'Parker', 'DefinitelyNotSpiderMan@example.com', 'Reporter for the Daily Bugle', 0.01, 'John.Jameson@example.com'),
-    ('Diana', 'Prince', 'DefinitelyNotWonderWoman@example.com', 'Curator', NULL, 'DefinitelyNotSuperMan@example.com')
+    ('Diana', 'Prince', 'DefinitelyNotWonderWoman@example.com', 'Curator', 88000, 'DefinitelyNotSuperMan@example.com')
 ) AS v(first_name, last_name, email, job_title, salary, manager)
 JOIN users m ON lower(m.email) = lower(v.manager)
 ON CONFLICT DO NOTHING;
+
+-- Every user needs a salary. Fill in users that existed before this seed (or were created
+-- without one), including the first admin; salaries already set are kept.
+UPDATE users u
+SET salary = COALESCE(v.salary, CASE u.role WHEN 'admin' THEN 120000 WHEN 'manager' THEN 130000 ELSE 80000 END)
+FROM users x
+LEFT JOIN (VALUES
+    ('definitelynotbatman@example.com', 200000),
+    ('definitelynotsuperman@example.com', 68000),
+    ('definitelynotwonderwoman@example.com', 88000)
+) AS v(email, salary) ON v.email = lower(x.email)
+WHERE x.id = u.id AND u.salary IS NULL;
 
 INSERT INTO projects (name, description, start_date, end_date, budget, manager_id, status, created_by)
 SELECT v.name, v.description, v.start_date::date, v.end_date::date, v.budget, m.id,
@@ -52,7 +67,11 @@ FROM (VALUES
     ('Interview Wonder Woman', 'Land the Daily Planet''s first sit-down interview with the Amazon princess.',
      '2026-09-01', '2026-11-30', 3000, 'DefinitelyNotSuperMan@example.com', 'in_progress'),
     ('Themysciran Antiquities Exhibit', 'Catalogue and display ancient Greek artefacts of suspiciously recent origin.',
-     '2026-10-01', '2027-04-30', 40000, 'DefinitelyNotSuperMan@example.com', 'not_started')
+     '2026-10-01', '2027-04-30', 40000, 'DefinitelyNotSuperMan@example.com', 'not_started'),
+    ('Daily Planet Printing Press Repair', 'Fix the press after a mysterious man of steel "helped" unjam it.',
+     '2026-03-01', '2026-06-30', 20000, 'DefinitelyNotSuperMan@example.com', 'completed'),
+    ('Spider-Slayer Billboard Campaign', 'Citywide billboards warning New Yorkers about Spider-Man; pulled after the lawsuits.',
+     '2026-04-01', '2026-09-30', 30000, 'John.Jameson@example.com', 'abandoned')
 ) AS v(name, description, start_date, end_date, budget, manager, status)
 JOIN users m ON lower(m.email) = lower(v.manager)
 ON CONFLICT DO NOTHING;
@@ -146,6 +165,101 @@ FROM (VALUES
 JOIN projects p ON p.name = v.project
 JOIN milestones m ON m.project_id = p.id AND m.sequence_number = v.seq
 JOIN users u ON lower(u.email) = lower(v.email)
+ON CONFLICT DO NOTHING;
+
+-- Schedule demo: superhero projects whose dates are relative to the day the seed runs, so the
+-- dashboard always has examples. Unmask Spider-Man is late (past its end date) and puts Peter
+-- Parker over-allocated; Fortress of Solitude is at risk (over 75% of its time used, 1 of 4
+-- milestones done); the Lasso trial is at risk (an overdue milestone). Offsets are days from today.
+INSERT INTO projects (name, description, start_date, end_date, budget, manager_id, status, created_by)
+SELECT v.name, v.description, CURRENT_DATE + v.start_off, CURRENT_DATE + v.end_off, v.budget, m.id,
+       'in_progress',
+       (SELECT id FROM users WHERE role = 'admin' AND is_archived = false ORDER BY created_at LIMIT 1)
+FROM (VALUES
+    ('Unmask Spider-Man by Any Means', 'Jameson funds a robot to catch Spider-Man and reveal his face once and for all.',
+     -120, -10, 8000, 'John.Jameson@example.com'),
+    ('Fortress of Solitude Spring Cleaning', 'Tidy the Arctic hideout before anyone from the Daily Planet visits.',
+     -90, 20, 15000, 'DefinitelyNotSuperMan@example.com'),
+    ('Lasso of Truth Courtroom Trial', 'Admit the Lasso of Truth as evidence in Metropolis criminal court.',
+     -30, 150, 25000, 'DefinitelyNotSuperMan@example.com')
+) AS v(name, description, start_off, end_off, budget, manager)
+JOIN users m ON lower(m.email) = lower(v.manager)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO project_allocations (project_id, user_id, allocated_hours, allocated_by)
+SELECT p.id, u.id, v.hours, p.manager_id
+FROM (VALUES
+    ('Unmask Spider-Man by Any Means', 'DefinitelyNotSpiderMan@example.com', 1000),
+    ('Fortress of Solitude Spring Cleaning', 'DefinitelyNotWonderWoman@example.com', 400),
+    ('Lasso of Truth Courtroom Trial', 'DefinitelyNotWonderWoman@example.com', 200)
+) AS v(project, email, hours)
+JOIN projects p ON p.name = v.project
+JOIN users u ON lower(u.email) = lower(v.email)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO milestones (project_id, sequence_number, name, goal, deliverables, completion_criteria,
+                        start_date, end_date, actual_start_date, actual_end_date, status, completed_at)
+SELECT p.id, v.seq, v.name, v.goal, v.deliverables, v.criteria,
+       CURRENT_DATE + v.start_off, CURRENT_DATE + v.end_off,
+       CURRENT_DATE + v.actual_start_off, CURRENT_DATE + v.actual_end_off, v.status::milestone_status,
+       CASE WHEN v.status = 'completed' THEN (CURRENT_DATE + v.actual_end_off)::timestamptz END
+FROM (VALUES
+    ('Unmask Spider-Man by Any Means', 1, 'Hire Spencer Smythe', 'Find an engineer who hates Spider-Man too',
+     'Signed contract', 'Smythe agrees to build a Spider-Slayer', -120, -80, -120, -82, 'completed'),
+    ('Unmask Spider-Man by Any Means', 2, 'Build the Spider-Slayer', 'A robot that can out-swing Spider-Man',
+     'Working prototype', 'Prototype climbs the Daily Bugle building', -79, -30, -79, NULL, 'in_progress'),
+    ('Unmask Spider-Man by Any Means', 3, 'Field test over Manhattan', 'Catch Spider-Man on camera, unmasked',
+     'Front-page photo of the unmasking', 'Photo runs above the fold', -29, -10, NULL, NULL, 'not_started'),
+    ('Fortress of Solitude Spring Cleaning', 1, 'Sort the Kryptonian crystals', 'Label every memory crystal',
+     'Crystal inventory', 'Every crystal is labelled', -90, -60, -90, -62, 'completed'),
+    ('Fortress of Solitude Spring Cleaning', 2, 'Defrost the entrance', 'Make the giant key usable again',
+     'Clear entrance tunnel', 'The door opens without heat vision', -59, 5, -59, NULL, 'in_progress'),
+    ('Fortress of Solitude Spring Cleaning', 3, 'Service the Phantom Zone projector', 'Nothing escapes during cleaning',
+     'Maintenance log', 'Projector passes a self-test', 6, 12, NULL, NULL, 'not_started'),
+    ('Fortress of Solitude Spring Cleaning', 4, 'Hide the Fortress from Lois', 'Keep the secret identity secret',
+     'New snow camouflage', 'Lois''s plane flies straight past', 13, 20, NULL, NULL, 'not_started'),
+    ('Lasso of Truth Courtroom Trial', 1, 'Prepare the lasso as evidence', 'Prove the lasso works under oath',
+     'Expert witness statement', 'Judge accepts the lasso as evidence', -30, -5, -30, NULL, 'in_progress'),
+    ('Lasso of Truth Courtroom Trial', 2, 'Jury selection', 'Find twelve jurors who have never met an Amazon',
+     'Seated jury', 'Both sides accept the jury', -4, 60, NULL, NULL, 'not_started'),
+    ('Lasso of Truth Courtroom Trial', 3, 'Reach a verdict', 'Close the case truthfully',
+     'Verdict', 'The jury returns a verdict', 61, 150, NULL, NULL, 'not_started')
+) AS v(project, seq, name, goal, deliverables, criteria, start_off, end_off,
+       actual_start_off, actual_end_off, status)
+JOIN projects p ON p.name = v.project
+ON CONFLICT DO NOTHING;
+
+INSERT INTO milestone_assignments (milestone_id, user_id, assigned_by, detached_at)
+SELECT m.id, u.id, p.manager_id, CASE WHEN m.status = 'completed' THEN m.completed_at END
+FROM (VALUES
+    ('Unmask Spider-Man by Any Means', 1, 'DefinitelyNotSpiderMan@example.com'),
+    ('Unmask Spider-Man by Any Means', 2, 'DefinitelyNotSpiderMan@example.com'),
+    ('Fortress of Solitude Spring Cleaning', 1, 'DefinitelyNotWonderWoman@example.com'),
+    ('Fortress of Solitude Spring Cleaning', 2, 'DefinitelyNotWonderWoman@example.com'),
+    ('Lasso of Truth Courtroom Trial', 1, 'DefinitelyNotWonderWoman@example.com')
+) AS v(project, seq, email)
+JOIN projects p ON p.name = v.project
+JOIN milestones m ON m.project_id = p.id AND m.sequence_number = v.seq
+JOIN users u ON lower(u.email) = lower(v.email)
+ON CONFLICT DO NOTHING;
+
+-- Dependency chains: each milestone depends on the one before it.
+INSERT INTO milestone_dependencies (milestone_id, depends_on_milestone_id)
+SELECT m.id, d.id
+FROM (VALUES
+    ('Take Photos of Spider-Man', 2, 1),
+    ('Take Photos of Spider-Man', 3, 2),
+    ('Unmask Spider-Man by Any Means', 2, 1),
+    ('Unmask Spider-Man by Any Means', 3, 2),
+    ('Fortress of Solitude Spring Cleaning', 2, 1),
+    ('Fortress of Solitude Spring Cleaning', 3, 2),
+    ('Fortress of Solitude Spring Cleaning', 4, 3),
+    ('Lasso of Truth Courtroom Trial', 2, 1),
+    ('Lasso of Truth Courtroom Trial', 3, 2)
+) AS v(project, seq, depends_on_seq)
+JOIN projects p ON p.name = v.project
+JOIN milestones m ON m.project_id = p.id AND m.sequence_number = v.seq
+JOIN milestones d ON d.project_id = p.id AND d.sequence_number = v.depends_on_seq
 ON CONFLICT DO NOTHING;
 
 -- Time entries: weekly 8-hour days for each assignee across their milestone, up to today.

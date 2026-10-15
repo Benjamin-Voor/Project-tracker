@@ -9,8 +9,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import { hideBelowMd, hideOnXs, scrollX } from './responsive';
 
 /**
  * Whether the user may edit/archive/allocate on this project.
@@ -20,6 +22,25 @@ import {
  */
 export function canManageProject(user, project) {
   return user.role === 'admin' || (user.role === 'manager' && user.id === project.manager_id);
+}
+
+const CLOSED_STATUSES = ['completed', 'abandoned'];
+const RISK_CHIPS = {
+  late: { label: 'late', color: 'error' },
+  at_risk: { label: 'at risk', color: 'warning' },
+  on_track: { label: 'on track', color: 'success' },
+  closed: { label: 'closed', color: 'default' },
+};
+
+/**
+ * Risk status of a project. Closed projects (completed, abandoned or archived) are not checked.
+ * @param {object} project
+ * @returns {'late'|'at_risk'|'on_track'|'closed'}
+ */
+export function riskOf(project) {
+  if (project.is_archived || CLOSED_STATUSES.includes(project.status)) return 'closed';
+  if (project.is_late) return 'late';
+  return project.at_risk ? 'at_risk' : 'on_track';
 }
 
 /**
@@ -39,17 +60,18 @@ function ProjectTable({
   if (projects.length === 0) return <Typography>No projects to show.</Typography>;
 
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} sx={scrollX}>
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
-            <TableCell>Manager</TableCell>
-            <TableCell>Dates</TableCell>
-            <TableCell align="right">Hours logged / allocated</TableCell>
-            <TableCell align="right">Budget</TableCell>
+            <TableCell sx={hideBelowMd}>Manager</TableCell>
+            <TableCell sx={hideOnXs}>Dates</TableCell>
+            <TableCell align="right" sx={hideOnXs}>Hours logged / allocated</TableCell>
+            <TableCell align="right" sx={hideBelowMd}>Budget</TableCell>
             <TableCell>Status</TableCell>
-            <TableCell align="right">Team</TableCell>
+            <TableCell>Risk</TableCell>
+            <TableCell align="right" sx={hideOnXs}>Team</TableCell>
             <TableCell />
           </TableRow>
         </TableHead>
@@ -62,14 +84,19 @@ function ProjectTable({
                   {project.name}
                   {project.is_archived && <Chip size="small" label="archived" sx={{ ml: 1 }} />}
                 </TableCell>
-                <TableCell>{project.manager_name}</TableCell>
-                <TableCell>{`${project.start_date} to ${project.end_date}`}</TableCell>
-                <TableCell align="right">{`${project.logged_hours} / ${project.allocated_hours}`}</TableCell>
-                <TableCell align="right">
+                <TableCell sx={hideBelowMd}>{project.manager_name}</TableCell>
+                <TableCell sx={hideOnXs}>{`${project.start_date} to ${project.end_date}`}</TableCell>
+                <TableCell align="right" sx={hideOnXs}>{`${project.logged_hours} / ${project.allocated_hours}`}</TableCell>
+                <TableCell align="right" sx={hideBelowMd}>
                   {project.budget == null ? '-' : Number(project.budget).toLocaleString()}
                 </TableCell>
                 <TableCell>{project.status.replace('_', ' ')}</TableCell>
-                <TableCell align="right">{project.allocation_count}</TableCell>
+                <TableCell>
+                  <Tooltip title={(project.risk_reasons || []).join('; ')}>
+                    <Chip size="small" {...RISK_CHIPS[riskOf(project)]} />
+                  </Tooltip>
+                </TableCell>
+                <TableCell align="right" sx={hideOnXs}>{project.allocation_count}</TableCell>
                 <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                   <Button size="small" variant="outlined" onClick={() => onOpen(project)}>Open</Button>
                   <Button size="small" onClick={() => onAllocations(project)}>Team</Button>
@@ -106,6 +133,9 @@ ProjectTable.propTypes = {
     status: PropTypes.string,
     is_archived: PropTypes.bool,
     allocation_count: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    is_late: PropTypes.bool,
+    at_risk: PropTypes.bool,
+    risk_reasons: PropTypes.arrayOf(PropTypes.string),
   })).isRequired,
   currentUser: PropTypes.shape({
     id: PropTypes.string.isRequired,

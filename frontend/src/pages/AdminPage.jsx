@@ -5,9 +5,13 @@ import {
 import AddUserDialog from '../components/AddUserDialog';
 import AuditLogTable from '../components/AuditLogTable';
 import EditUserDialog from '../components/EditUserDialog';
+import FilterBar, { matchesSearch } from '../components/FilterBar';
 import UserTable from '../components/UserTable';
 import { useAuth } from '../context/AuthContext';
 import { archiveUser, fetchUsers, restoreUser } from '../services/users';
+
+const ROLE_OPTIONS = ['admin', 'manager', 'employee'].map((r) => ({ value: r, label: r }));
+const EMPTY_FILTERS = { role: '', manager: '' };
 
 /**
  * Users page. Admins manage everyone and see the audit log; managers edit and
@@ -26,6 +30,8 @@ function AdminPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -61,9 +67,27 @@ function AdminPage() {
 
   const managers = users.filter((u) => u.role === 'manager' && !u.is_archived);
 
+  // Managers only see their own team, so role and manager filters are admin-only.
+  const filterDefs = isAdmin ? [
+    { key: 'role', label: 'Role', value: filters.role, options: ROLE_OPTIONS },
+    {
+      key: 'manager',
+      label: 'Manager',
+      value: filters.manager,
+      options: users.filter((u) => u.role === 'manager')
+        .map((u) => ({ value: u.id, label: `${u.first_name} ${u.last_name}` })),
+    },
+  ] : [];
+  const visibleUsers = users.filter((u) => matchesSearch(search, [`${u.first_name} ${u.last_name}`, u.email])
+    && (!filters.role || u.role === filters.role)
+    && (!filters.manager || u.manager_id === filters.manager));
+
   return (
     <Container sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2,
+      }}
+      >
         <Typography variant="h4" component="h1">{isAdmin ? 'Admin' : 'My team'}</Typography>
         {isAdmin && tab === 'users' && (
           <Box>
@@ -76,7 +100,7 @@ function AdminPage() {
         )}
       </Box>
       {isAdmin && (
-        <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+        <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons={false} sx={{ mb: 2 }}>
           <Tab value="users" label="Users" />
           <Tab value="audit" label="Audit log" />
         </Tabs>
@@ -84,8 +108,18 @@ function AdminPage() {
       {tab === 'audit' && isAdmin ? <AuditLogTable actorId={actorId} /> : (
         <>
           {actionError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError('')}>{actionError}</Alert>}
+          <FilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchLabel="Search name or email"
+            filters={filterDefs}
+            onFilterChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
+            onClear={() => { setSearch(''); setFilters(EMPTY_FILTERS); }}
+            shown={visibleUsers.length}
+            total={users.length}
+          />
           <UserTable
-            users={users}
+            users={visibleUsers}
             loading={loading}
             error={error}
             actor={currentUser}

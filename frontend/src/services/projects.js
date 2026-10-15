@@ -171,6 +171,34 @@ export async function unassignMilestone(actorId, projectId, milestoneId, userId)
 }
 
 /**
+ * Make a milestone depend on another milestone of the same project.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId - the milestone that waits
+ * @param {string} dependsOnId - the milestone it waits for
+ * @returns {Promise<object[]>} the updated milestones (each has `depends_on`)
+ */
+export async function addMilestoneDependency(actorId, projectId, milestoneId, dependsOnId) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}/dependencies`, {
+    method: 'POST', actorId, body: { depends_on_milestone_id: dependsOnId },
+  })).milestones;
+}
+
+/**
+ * Remove a milestone dependency.
+ * @param {string} actorId
+ * @param {string} projectId
+ * @param {string} milestoneId
+ * @param {string} dependsOnId
+ * @returns {Promise<object[]>} the updated milestones
+ */
+export async function removeMilestoneDependency(actorId, projectId, milestoneId, dependsOnId) {
+  return (await request(`/api/projects/${projectId}/milestones/${milestoneId}/dependencies/${dependsOnId}`, {
+    method: 'DELETE', actorId,
+  })).milestones;
+}
+
+/**
  * List time entries (managers/admins see all; others see their own).
  * @param {string} actorId
  * @param {string} projectId
@@ -224,4 +252,15 @@ export async function addExpense(actorId, projectId, expense) {
   return (await request(`/api/projects/${projectId}/expenses`, {
     method: 'POST', actorId, body: expense,
   })).expenses;
+}
+
+/**
+ * Each visible employee's allocated hours across active projects, with capacity
+ * (8 h per working day over their project dates) and an over-allocation flag.
+ * Admins see everyone, managers their team, employees themselves.
+ * @param {string} actorId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchWorkload(actorId) {
+  return (await request('/api/projects/workload', { actorId })).workload;
 }

@@ -16,6 +16,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useIsPhone } from './responsive';
 import { addAllocation, fetchAllocations, removeAllocation } from '../services/projects';
 
 /**
@@ -32,6 +33,7 @@ import { addAllocation, fetchAllocations, removeAllocation } from '../services/p
 function AllocationsDialog({
   open, project, actorId, canManage, employees, onClose, onChanged,
 }) {
+  const fullScreen = useIsPhone();
   const [allocations, setAllocations] = useState([]);
   const [userId, setUserId] = useState('');
   const [hours, setHours] = useState('');
@@ -78,7 +80,7 @@ function AllocationsDialog({
   const available = employees.filter((e) => !allocatedIds.has(e.id));
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog fullScreen={fullScreen} open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{project ? `Team: ${project.name}` : 'Team'}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -105,7 +107,7 @@ function AllocationsDialog({
         )}
         {canManage && (
           <Box component="form" onSubmit={handleAdd} sx={{ mt: 2 }}>
-            <Stack direction="row" spacing={1}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <TextField
                 select
                 size="small"
@@ -129,7 +131,7 @@ function AllocationsDialog({
                 onChange={(e) => setHours(e.target.value)}
                 required
                 slotProps={{ htmlInput: { min: 0, step: '0.5' } }}
-                sx={{ width: 150 }}
+                sx={{ width: { sm: 150 } }}
               />
               <Button type="submit" variant="contained">Add</Button>
             </Stack>

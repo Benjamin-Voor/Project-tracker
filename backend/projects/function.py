@@ -1,6 +1,7 @@
 """
 Projects service: project CRUD, archive/restore, employee allocation, milestones,
-time entries, expenses and the budget summary.
+time entries, expenses, the budget summary, per-project risk flags and the
+employee workload report (GET /projects/workload).
 
 The client sends only `actor_id`; the role is looked up in the database.
 """
@@ -303,6 +304,11 @@ def _route(event: dict[str, Any]) -> dict[str, Any]:
             return _response(201, {"project": db.create_project(PG_CONFIG, actor, clean)})
         raise HttpError(405, {"error": f"Method {method} not allowed"})
 
+    if segments == ["workload"]:
+        if method != "GET":
+            raise HttpError(405, {"error": f"Method {method} not allowed"})
+        return _response(200, {"workload": db.workload_report(PG_CONFIG, actor)})
+
     project = _load_project(segments[0])
     project_id = str(project["id"])
     sub = segments[1:]
@@ -405,10 +411,13 @@ def _milestone_route(
     can_manage: bool,
     sub: list[str],
 ) -> dict[str, Any]:
-    """Handle /projects/{id}/milestones[/{milestone_id}[/archive|/assignments[/{user_id}]]]."""
+    """Handle /projects/{id}/milestones[/dependencies | /{milestone_id}[/archive
+    | /assignments[/{user_id}] | /dependencies[/{depends_on_milestone_id}]]]."""
     project_id = str(project["id"])
     if not sub and method == "GET":
         return _response(200, {"milestones": db.list_milestones(PG_CONFIG, project_id)})
+    if sub == ["dependencies"] and method == "GET":
+        return _response(200, {"dependencies": db.list_dependencies(PG_CONFIG, project_id)})
     if not can_manage:
         raise _forbid("Only the project's manager or an admin can change milestones")
     if project["is_archived"]:
@@ -437,6 +446,13 @@ def _milestone_route(
         return _response(201, {"milestones": db.assign_milestone(PG_CONFIG, actor, project_id, milestone_id, user_id)})
     if len(rest) == 2 and rest[0] == "assignments" and method == "DELETE" and _is_uuid(rest[1]):
         return _response(200, {"milestones": db.unassign_milestone(PG_CONFIG, actor, project_id, milestone_id, rest[1])})
+    if rest == ["dependencies"] and method == "POST":
+        depends_on_id = _parse_body(event).get("depends_on_milestone_id")
+        if not _is_uuid(depends_on_id):
+            raise HttpError(400, {"error": "Validation failed", "fields": {"depends_on_milestone_id": "required"}})
+        return _response(201, {"milestones": db.add_dependency(PG_CONFIG, actor, project_id, milestone_id, depends_on_id)})
+    if len(rest) == 2 and rest[0] == "dependencies" and method == "DELETE" and _is_uuid(rest[1]):
+        return _response(200, {"milestones": db.remove_dependency(PG_CONFIG, actor, project_id, milestone_id, rest[1])})
     raise HttpError(404, {"error": "Route not found"})
 
 
